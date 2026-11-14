@@ -1,0 +1,49 @@
+schema_version: 1
+subtask_id: "06"
+feature: 3D Vector Calculator
+assigned_agent: generalPurpose
+model: grok-4.7
+token_budget: 200000
+state: completed
+completed_at: 2026-11-13T09:48:03.237Z
+checklist:
+  - id: D01
+    text: test/math.test.mjs for the five operations, null guards, clamping, and
+      formatNumber
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: D02
+    text: test/storage.test.mjs using an in-memory storage area
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: D03
+    text: test/scene.test.mjs for project() without a canvas
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: D04
+    text: test/server.test.mjs for 200, MIME, 404, and traversal
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: D05
+    text: README.md with npm start, npm test, the five operations, and localStorage
+      behavior
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD01
+    text: npm test passes with node:test and no extra runner
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD02
+    text: README states the app root command, the default port, and that the 3D view
+      is canvas rather than Three.js
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD03
+    text: Tests cover the fixtures named in the vector-math subtask and the storage
+      caps
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+artifacts: []
+errors: []
+notes: ""
+extra: {}

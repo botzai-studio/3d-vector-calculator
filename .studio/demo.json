@@ -1,0 +1,130 @@
+{
+  "slug": "3d-vector-calculator",
+  "title": "3D Vector Calculator",
+  "pitch": "Compute dot product, cross product, magnitude, normalize, and the angle between two 3D vectors, with a live arrow view.",
+  "specDir": "20261112-3d-vector-calculator",
+  "createdAt": "2026-11-12T12:13:37.730Z",
+  "model": "grok-4.7",
+  "inference": {},
+  "files": [
+    "AGENT.md",
+    "AGENTS.md",
+    "README.md",
+    "bot/agent.ts",
+    "bot/instructions.md",
+    "bot/skills/support.md",
+    "bot/tools/describe_demo.ts",
+    "evals/evals.config.ts",
+    "evals/readiness.eval.ts",
+    "package.json",
+    "public/app.js",
+    "public/demo.js",
+    "public/index.html",
+    "public/math.js",
+    "public/scene.js",
+    "public/storage.js",
+    "public/styles.css",
+    "server.mjs",
+    "test/demo.test.mjs",
+    "test/math.test.mjs",
+    "test/scene.test.mjs",
+    "test/server.test.mjs",
+    "test/storage.test.mjs",
+    "tsconfig.agent.json"
+  ],
+  "verify": {
+    "ok": false,
+    "checks": [
+      {
+        "name": "package.json",
+        "ok": true,
+        "output": "start: node server.mjs"
+      },
+      {
+        "name": "node --check",
+        "ok": true,
+        "output": "11 files parse"
+      },
+      {
+        "name": "behavioral tests",
+        "ok": false,
+        "output": "Not executed: isolated verification unavailable. Review and test in a disposable credential-free sandbox; syntax checks are not behavioral verification."
+      }
+    ]
+  },
+  "hostLimitAcknowledged": true,
+  "board": {
+    "url": "https://github.com/orgs/zotoio/projects/4",
+    "mode": "live",
+    "owner": "zotoio",
+    "repo": "grok-agent-studio",
+    "projectNumber": 4
+  },
+  "runs": [
+    {
+      "at": "2026-11-12T13:28:13.745Z",
+      "items": [
+        {
+          "key": "#23",
+          "title": "01: Project skeleton and server",
+          "state": "done"
+        },
+        {
+          "key": "#24",
+          "title": "02: Vector math module",
+          "state": "done"
+        },
+        {
+          "key": "#25",
+          "title": "03: Library and history storage",
+          "state": "done"
+        },
+        {
+          "key": "#26",
+          "title": "04: Canvas vector scene",
+          "state": "done"
+        },
+        {
+          "key": "#27",
+          "title": "05: Calculation workspace",
+          "state": "done"
+        },
+        {
+          "key": "#28",
+          "title": "06: Tests and README",
+          "state": "done"
+        }
+      ],
+      "ok": false
+    },
+    {
+      "at": "2026-11-12T21:47:17.949Z",
+      "items": [],
+      "ok": false
+    },
+    {
+      "at": "2026-11-13T09:21:56.370Z",
+      "items": [],
+      "ok": false
+    },
+    {
+      "at": "2026-11-13T09:48:02.934Z",
+      "items": [
+        {
+          "key": "#35",
+          "title": "add demo button",
+          "state": "done"
+        }
+      ],
+      "ok": false
+    }
+  ],
+  "completed": [
+    "01",
+    "02",
+    "03",
+    "04",
+    "05",
+    "06"
+  ]
+}

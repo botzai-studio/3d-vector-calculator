@@ -1,0 +1,48 @@
+schema_version: 1
+subtask_id: "04"
+feature: 3D Vector Calculator
+assigned_agent: generalPurpose
+model: grok-4.7
+token_budget: 200000
+state: completed
+completed_at: 2026-11-13T09:48:03.237Z
+checklist:
+  - id: D01
+    text: public/scene.js exporting createScene(canvas) and a pure project(point,
+      camera)
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: D02
+    text: an XZ grid and an RGB axis triad on a dark canvas
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: D03
+    text: color-coded arrows for A, B, and an optional result vector, plus a small
+      legend
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: D04
+    text: pointer-drag orbit and wheel zoom that keep the view framed on the origin
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD01
+    text: project() maps the origin to the view center for the default camera
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD02
+    text: A point on the camera's up axis projects above the origin, and a point to
+      the camera's right projects to the right
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD03
+    text: createScene does not touch document or window at import time
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD04
+    text: scene.js does not import math.js or storage.js
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+artifacts: []
+errors: []
+notes: ""
+extra: {}

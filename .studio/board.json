@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "mode": "live",
+  "owner": "zotoio",
+  "repo": "grok-agent-studio",
+  "repositoryId": "R_kgDOVmzb5A",
+  "defaultBranch": "main",
+  "projectId": "PVT_kwDOAjS5Ic4BrTUn",
+  "projectNumber": 4,
+  "url": "https://github.com/orgs/zotoio/projects/4",
+  "title": "Demo: 3D Vector Calculator",
+  "fieldId": "PVTSSF_lADOAjS5Ic4BrTUnzhpmptU",
+  "fieldName": "Status",
+  "options": {
+    "Backlog": "6b622cf4",
+    "Ready": "e8c9ba0b",
+    "In progress": "a87059c3",
+    "Review": "872813cd",
+    "Done": "ed75fb8e"
+  },
+  "specItems": {
+    "01": {
+      "issueId": "I_kwDOVmzb5M8AAAABenaSDA",
+      "number": 23,
+      "itemId": "PVTI_lADOAjS5Ic4BrTUnzhIIm7g",
+      "url": "https://github.com/zotoio/grok-agent-studio/issues/23"
+    },
+    "02": {
+      "issueId": "I_kwDOVmzb5M8AAAABenaU2w",
+      "number": 24,
+      "itemId": "PVTI_lADOAjS5Ic4BrTUnzhIInAc",
+      "url": "https://github.com/zotoio/grok-agent-studio/issues/24"
+    },
+    "03": {
+      "issueId": "I_kwDOVmzb5M8AAAABenaX7A",
+      "number": 25,
+      "itemId": "PVTI_lADOAjS5Ic4BrTUnzhIInE8",
+      "url": "https://github.com/zotoio/grok-agent-studio/issues/25"
+    },
+    "04": {
+      "issueId": "I_kwDOVmzb5M8AAAABenabYg",
+      "number": 26,
+      "itemId": "PVTI_lADOAjS5Ic4BrTUnzhIInJ8",
+      "url": "https://github.com/zotoio/grok-agent-studio/issues/26"
+    },
+    "05": {
+      "issueId": "I_kwDOVmzb5M8AAAABenaeMA",
+      "number": 27,
+      "itemId": "PVTI_lADOAjS5Ic4BrTUnzhIInNo",
+      "url": "https://github.com/zotoio/grok-agent-studio/issues/27"
+    },
+    "06": {
+      "issueId": "I_kwDOVmzb5M8AAAABenahWg",
+      "number": 28,
+      "itemId": "PVTI_lADOAjS5Ic4BrTUnzhIInR8",
+      "url": "https://github.com/zotoio/grok-agent-studio/issues/28"
+    }
+  },
+  "createdAt": "2026-11-12T12:14:08.291Z"
+}

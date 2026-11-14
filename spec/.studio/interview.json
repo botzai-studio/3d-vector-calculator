@@ -1,0 +1,218 @@
+[
+  {
+    "role": "user",
+    "text": "3d calculator",
+    "id": "9324dfc2-479b-4d85-ac6d-9ec8f0ca5f7e",
+    "at": 1794452089805
+  },
+  {
+    "role": "agent",
+    "agent": "interviewer",
+    "text": "A “3D calculator” could mean a few different tools, so I want to pin down the core job first. Which of these is closest to what you want?",
+    "meta": {
+      "kind": "question",
+      "topic": "users",
+      "suggestions": [
+        "Volume and surface area of 3D shapes",
+        "A normal calculator with a 3D-styled keypad",
+        "Vector and coordinate math in 3D space",
+        "Something else — I'll describe it"
+      ],
+      "progress": {
+        "asked": 1,
+        "max": 5
+      }
+    },
+    "id": "442d0094-a2cd-41bc-bd20-3978b1e617d1",
+    "at": 1794452098339
+  },
+  {
+    "role": "user",
+    "text": "Vector and coordinate math in 3D space",
+    "id": "40deca1b-5f45-4b75-856a-b93af215b6dd",
+    "at": 1794484884910
+  },
+  {
+    "role": "agent",
+    "agent": "interviewer",
+    "text": "Vector and coordinate math it is. Which operations should be the must-haves on day one?",
+    "meta": {
+      "kind": "question",
+      "topic": "features",
+      "suggestions": [
+        "Dot and cross product, magnitude, normalize, and angle between two vectors",
+        "Add, subtract, scale, plus distance, midpoint, and Cartesian/spherical conversion",
+        "Those vector ops plus a live 3D arrow view of the inputs and result",
+        "Rotation, scale, and translation of a point, with the matrix shown"
+      ],
+      "progress": {
+        "asked": 2,
+        "max": 5
+      }
+    },
+    "id": "cf384fc4-4db4-4518-b6d2-49af97550298",
+    "at": 1794484900129
+  },
+  {
+    "role": "user",
+    "text": "Dot and cross product, magnitude, normalize, and angle between two vectors",
+    "id": "16f1e383-a86a-4311-b92e-4e97d12578e5",
+    "at": 1794484922630
+  },
+  {
+    "role": "agent",
+    "agent": "interviewer",
+    "text": "Those five operations are the core. What should the app remember between visits?",
+    "meta": {
+      "kind": "question",
+      "topic": "data",
+      "suggestions": [
+        "A short history of recent calculations you can reopen",
+        "Named vectors you save and reuse (like “up” or “velocity”)",
+        "Both a calculation history and a small library of named vectors",
+        "Nothing saved — just the two vectors you type in right now"
+      ],
+      "progress": {
+        "asked": 3,
+        "max": 5
+      }
+    },
+    "id": "8aa7c720-ba98-43bc-a739-3d08b74c05c4",
+    "at": 1794484926743
+  },
+  {
+    "role": "user",
+    "text": "all of above, and with threejs visualisations",
+    "id": "4e82901a-6741-4446-ade1-2ceb8771e285",
+    "at": 1794484979866
+  },
+  {
+    "role": "agent",
+    "agent": "interviewer",
+    "text": "History and a named-vector library, plus a live 3D view of the arrows. What should that screen feel like?",
+    "meta": {
+      "kind": "question",
+      "topic": "look",
+      "suggestions": [
+        "Dark workspace: bright arrows on a black grid, numbers in a side panel",
+        "Light graph-paper page with a small 3D inset beside the inputs",
+        "Split layout: calculations on the left, a large 3D view on the right",
+        "Mostly the 3D scene, with compact floating readouts for the results"
+      ],
+      "progress": {
+        "asked": 4,
+        "max": 5
+      }
+    },
+    "id": "587699cc-45c3-47ce-b52a-9f6b71ac086d",
+    "at": 1794484991776
+  },
+  {
+    "role": "user",
+    "text": "Split layout: calculations on the left, a large 3D view on the right",
+    "id": "eacac7b5-b7a9-4120-9068-e011579187a8",
+    "at": 1794485034948
+  },
+  {
+    "role": "agent",
+    "agent": "interviewer",
+    "text": "One last check before I lock the approach. What should count as “done” for this first version?",
+    "meta": {
+      "kind": "question",
+      "topic": "constraints",
+      "suggestions": [
+        "Angles in degrees, results to about 3 decimal places, desktop-first",
+        "Radians and fuller precision, aimed at students checking homework",
+        "Works fully offline in one browser tab, no account",
+        "Show one operation’s result at a time so the panel stays easy to scan"
+      ],
+      "progress": {
+        "asked": 5,
+        "max": 5
+      }
+    },
+    "id": "2c26288b-dccf-4658-b26a-fd51f0aff14d",
+    "at": 1794485046879
+  },
+  {
+    "role": "user",
+    "text": "fully operational and polished",
+    "id": "d9dcd4e9-b5ef-4088-b08c-36ad7a541944",
+    "at": 1794485138630
+  },
+  {
+    "role": "agent",
+    "agent": "interviewer",
+    "text": "You’ll get one polished workspace for 3D vector math: enter or pick two vectors on the left, run dot product, cross product, magnitude, normalize, or the angle between them, and watch the arrows update in a large view on the right. A named-vector library and a short history stay in the browser so you can reopen them later. The 3D view is a small vanilla canvas scene (grid, axis triad, color-coded arrows) so it stays on the fixed no-dependency stack. Angles show in degrees, rounded to three decimal places.",
+    "meta": {
+      "kind": "summary",
+      "title": "3D Vector Calculator",
+      "slug": "3d-vector-calculator",
+      "pitch": "Compute dot product, cross product, magnitude, normalize, and the angle between two 3D vectors, with a live arrow view.",
+      "features": [
+        "Dot product, cross product, magnitude, normalize, and angle between two vectors",
+        "Split workspace: inputs and results on the left, large 3D arrow view on the right",
+        "Named vector library you can save and reuse",
+        "Recent calculation history you can reopen"
+      ],
+      "approach": [
+        "One page: left column for vector entry, the operation, the numeric result, the library, and history; right column for the 3D view",
+        "Vanilla canvas perspective view with a grid, an axis triad, and color-coded arrows for both inputs and the result, with no Three.js because the app cannot add npm packages",
+        "Angles in degrees, shown to three decimal places; a zero-length vector shows a clear message instead of a bogus angle",
+        "Named vectors and history persist in localStorage"
+      ],
+      "dataModel": [
+        {
+          "entity": "Vector",
+          "fields": [
+            "id",
+            "name",
+            "x",
+            "y",
+            "z"
+          ]
+        },
+        {
+          "entity": "Calculation",
+          "fields": [
+            "id",
+            "operation",
+            "vectorA",
+            "vectorB",
+            "result",
+            "createdAt"
+          ]
+        }
+      ],
+      "screens": [
+        "Workspace: calculation panel, library, and history on the left; large 3D view on the right"
+      ],
+      "look": "Polished split layout: a calm dark calculation panel beside a large dark viewport with a light grid and brightly colored vector arrows",
+      "openRisks": [
+        "Three.js was requested, but this stack has zero npm dependencies, so the 3D view is a custom canvas renderer rather than Three.js",
+        "Degrees and three decimal places are defaults; radians or more precision would change the result panel"
+      ]
+    },
+    "id": "952391e8-49a6-4ca5-b693-100246235c6c",
+    "at": 1794485162717
+  },
+  {
+    "role": "user",
+    "text": "Confirmed — write the spec.",
+    "id": "5fe84968-3cb8-46b9-9121-b5851b4d0ea4",
+    "at": 1794485207983
+  },
+  {
+    "role": "user",
+    "text": "Confirmed — write the spec.",
+    "id": "2d3be434-149a-40d5-a957-7a17b6970c28",
+    "at": 1794618719789
+  },
+  {
+    "role": "system",
+    "agent": "spec-judge",
+    "text": "Judge round 1: 4.3/5 — Approve. Recorded assessment replay. Approve after a small revision. Sequencing, fixtures, and the zero-dependency split are solid enough to build; specify when history rows are written and how the vector cap overflows, and pin light-grid camera defaults so the viewport matches the confirmed look.",
+    "id": "7942980e-df46-46cd-a8fd-511796a1d8c8",
+    "at": 1794618719798
+  }
+]

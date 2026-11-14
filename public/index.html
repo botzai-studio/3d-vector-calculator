@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>3D Vector Calculator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="workspace">
+    <aside id="panel" class="panel" aria-label="Calculation panel">
+      <header class="panel-header">
+        <h1>3D Vector Calculator</h1>
+        <p class="lede">Dot, cross, magnitude, normalize, and angle update as you type.</p>
+        <div class="demo-bar">
+          <button type="button" class="button button-demo" id="demo-toggle" aria-pressed="false" aria-describedby="demo-note">Play demo</button>
+          <p id="demo-note" class="demo-note" role="status">Sweeps A and B with easing so the arrows follow.</p>
+        </div>
+      </header>
+      <div id="panel-body" class="panel-body">
+        <section class="vector-card vector-a" aria-labelledby="vector-a-heading">
+          <h2 id="vector-a-heading" class="vector-title"><span class="swatch swatch-a" aria-hidden="true"></span>Vector A</h2>
+          <div class="components">
+            <label class="component">
+              <span>X</span>
+              <input id="a-x" name="a-x" type="text" inputmode="decimal" value="1" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Vector A x">
+            </label>
+            <label class="component">
+              <span>Y</span>
+              <input id="a-y" name="a-y" type="text" inputmode="decimal" value="0" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Vector A y">
+            </label>
+            <label class="component">
+              <span>Z</span>
+              <input id="a-z" name="a-z" type="text" inputmode="decimal" value="0" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Vector A z">
+            </label>
+          </div>
+        </section>
+
+        <section class="vector-card vector-b" aria-labelledby="vector-b-heading">
+          <h2 id="vector-b-heading" class="vector-title"><span class="swatch swatch-b" aria-hidden="true"></span>Vector B</h2>
+          <div class="components">
+            <label class="component">
+              <span>X</span>
+              <input id="b-x" name="b-x" type="text" inputmode="decimal" value="0" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Vector B x">
+            </label>
+            <label class="component">
+              <span>Y</span>
+              <input id="b-y" name="b-y" type="text" inputmode="decimal" value="1" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Vector B y">
+            </label>
+            <label class="component">
+              <span>Z</span>
+              <input id="b-z" name="b-z" type="text" inputmode="decimal" value="0" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Vector B z">
+            </label>
+          </div>
+        </section>
+
+        <fieldset class="block">
+          <legend>Operation</legend>
+          <div class="segments" role="radiogroup" aria-label="Operation">
+            <label class="segment">
+              <input type="radio" name="operation" value="dot" checked>
+              <span>Dot</span>
+            </label>
+            <label class="segment">
+              <input type="radio" name="operation" value="cross">
+              <span>Cross</span>
+            </label>
+            <label class="segment">
+              <input type="radio" name="operation" value="magnitude">
+              <span>Magnitude</span>
+            </label>
+            <label class="segment">
+              <input type="radio" name="operation" value="normalize">
+              <span>Normalize</span>
+            </label>
+            <label class="segment">
+              <input type="radio" name="operation" value="angle">
+              <span>Angle</span>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="block" id="target-field" data-active="false">
+          <legend>Unary target</legend>
+          <div class="segments segments-two" role="radiogroup" aria-label="Unary target">
+            <label class="segment">
+              <input type="radio" name="target" value="A" checked>
+              <span>A</span>
+            </label>
+            <label class="segment">
+              <input type="radio" name="target" value="B">
+              <span>B</span>
+            </label>
+          </div>
+          <p id="target-hint" class="hint">Magnitude and normalize use the selected vector. Dot, cross, and angle use both.</p>
+        </fieldset>
+
+        <section class="block result-block" aria-labelledby="result-heading">
+          <h2 id="result-heading">Result</h2>
+          <p id="result-formula" class="formula">A · B</p>
+          <p id="result-value" class="result-value" aria-live="polite">0.000</p>
+          <p id="message" class="message" role="status" aria-live="polite" hidden></p>
+        </section>
+
+        <section class="block" aria-labelledby="library-heading">
+          <h2 id="library-heading">Library</h2>
+          <form id="save-form" autocomplete="off">
+            <label class="name-field" for="vector-name">Name</label>
+            <input id="vector-name" name="vector-name" type="text" maxlength="48" placeholder="up, velocity, normal" autocomplete="off" autocapitalize="off" spellcheck="false">
+            <div class="save-actions">
+              <button type="submit" class="button button-primary" id="save-a">Save A</button>
+              <button type="button" class="button button-primary" id="save-b">Save B</button>
+            </div>
+          </form>
+          <p id="library-empty" class="empty">No saved vectors yet.</p>
+          <ul id="library-list" class="list"></ul>
+        </section>
+
+        <section class="block" aria-labelledby="history-heading">
+          <h2 id="history-heading">History</h2>
+          <p id="history-empty" class="empty">No calculations yet.</p>
+          <ul id="history-list" class="list"></ul>
+        </section>
+      </div>
+    </aside>
+    <main class="viewport" aria-label="Vector view">
+      <canvas id="scene" width="800" height="600" aria-label="3D vector view"></canvas>
+    </main>
+  </div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

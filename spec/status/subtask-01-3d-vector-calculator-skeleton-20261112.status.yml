@@ -1,0 +1,50 @@
+schema_version: 1
+subtask_id: "01"
+feature: 3D Vector Calculator
+assigned_agent: generalPurpose
+model: grok-4.7
+token_budget: 200000
+state: completed
+completed_at: 2026-11-13T09:48:03.237Z
+checklist:
+  - id: D01
+    text: package.json with type module, start and test scripts, and no dependencies
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: D02
+    text: server.mjs that serves public/ and exports createServer
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: D03
+    text: public/index.html split shell with an empty left panel and a canvas
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: D04
+    text: public/styles.css full-height dark split layout
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: D05
+    text: public/app.js ES module entry that loads without throwing
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD01
+    text: npm start serves index.html, styles.css, and app.js with matching MIME
+      types
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD02
+    text: A missing file returns 404
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD03
+    text: A path that contains .. does not escape public/
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD04
+    text: The page shows a left column and a right-hand canvas
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+artifacts: []
+errors: []
+notes: ""
+extra: {}

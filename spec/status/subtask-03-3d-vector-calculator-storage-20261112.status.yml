@@ -1,0 +1,46 @@
+schema_version: 1
+subtask_id: "03"
+feature: 3D Vector Calculator
+assigned_agent: generalPurpose
+model: grok-4.7
+token_budget: 200000
+state: completed
+completed_at: 2026-11-13T09:48:03.237Z
+checklist:
+  - id: D01
+    text: public/storage.js exporting createStore(storageArea)
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: D02
+    text: save, list, and delete for named vectors
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: D03
+    text: append and list for calculation history, newest first
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: D04
+    text: caps of 40 named vectors and 30 history entries, with write failures caught
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD01
+    text: A saved vector round-trips through a memory storage area with id, name, x,
+      y, and z
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD02
+    text: Deleting a vector removes only that id
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD03
+    text: Appending 31 calculations leaves the 30 newest
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD04
+    text: A storage area that throws on setItem does not crash the caller
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+artifacts: []
+errors: []
+notes: ""
+extra: {}

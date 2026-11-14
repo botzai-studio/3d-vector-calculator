@@ -1,0 +1,28 @@
+schema_version: 1
+spec_id: 20261112-3d-vector-calculator
+aggregate_state: completed
+aggregate_progress:
+  total: 6
+  completed: 6
+  in_progress: 0
+  blocked: 0
+  failed: 0
+subtasks:
+  - subtask_id: "01"
+    state: completed
+    status_path: specs/20261112-3d-vector-calculator/status/subtask-01-3d-vector-calculator-skeleton-20261112.status.yml
+  - subtask_id: "02"
+    state: completed
+    status_path: specs/20261112-3d-vector-calculator/status/subtask-02-3d-vector-calculator-vector-math-20261112.status.yml
+  - subtask_id: "03"
+    state: completed
+    status_path: specs/20261112-3d-vector-calculator/status/subtask-03-3d-vector-calculator-storage-20261112.status.yml
+  - subtask_id: "04"
+    state: completed
+    status_path: specs/20261112-3d-vector-calculator/status/subtask-04-3d-vector-calculator-scene-20261112.status.yml
+  - subtask_id: "05"
+    state: completed
+    status_path: specs/20261112-3d-vector-calculator/status/subtask-05-3d-vector-calculator-workspace-20261112.status.yml
+  - subtask_id: "06"
+    state: completed
+    status_path: specs/20261112-3d-vector-calculator/status/subtask-06-3d-vector-calculator-tests-readme-20261112.status.yml

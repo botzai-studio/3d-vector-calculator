@@ -1,0 +1,302 @@
+{
+  "title": "3D Vector Calculator",
+  "slug": "3d-vector-calculator",
+  "overview": "A single-page calculator for people checking 3D vector math in graphics, physics, or coursework. The left side computes dot product, cross product, magnitude, normalize, and the angle between two vectors. The right side draws those vectors as colored arrows on a dark perspective grid, and named vectors plus recent calculations stay in the browser.",
+  "motivation": [
+    "Vector identities are easy to mistype by hand, and a wrong cross-product direction is hard to spot from numbers alone.",
+    "A live arrow view next to the result makes direction, length, and angle checkable in one glance.",
+    "Keeping a named library and a short history locally lets someone reuse axes, velocities, or homework vectors without an account."
+  ],
+  "goals": [
+    "Dot, cross, magnitude, normalize, and angle match known fixtures: i·j = 0, i×j = k, |(3,4,0)| = 5, normalize(2,0,0) = (1,0,0), and the angle between i and j is 90 degrees.",
+    "A zero-length input to normalize or angle shows a clear message and never displays NaN.",
+    "Saving a named vector, reloading the page, and loading it into A or B restores the same components.",
+    "Reopening a history row restores the operation, both operand snapshots, the unary target, and the result.",
+    "npm test passes and npm start serves the split workspace with zero npm dependencies."
+  ],
+  "nonGoals": [
+    "Three.js, WebGL libraries, a bundler, or any npm dependency",
+    "Spherical or cylindrical conversion, matrices, quaternions, and transform gizmos",
+    "Accounts, server-side storage, import/export files, and collaboration",
+    "A mobile-first layout; the target is a desktop split workspace",
+    "Editing a past history row in place, or persisting the unsaved draft separately from history"
+  ],
+  "keyDecisions": [
+    {
+      "id": "KD-1",
+      "title": "Zero-dependency stack",
+      "detail": "Node.js 22 serves public/ with node:http and the client is vanilla ES modules. package.json lists no dependencies. Persistence is localStorage. Tests use node:test. Nothing is loaded from a CDN."
+    },
+    {
+      "id": "KD-2",
+      "title": "Canvas perspective instead of Three.js",
+      "detail": "The 3D view is a 2D canvas with a hand-rolled perspective projection, Y-up and right-handed. It draws an XZ grid, an RGB axis triad, and arrows for A, B, and a vector result. Drag orbits the origin and the wheel zooms. Camera basis math stays inside the scene module so it does not import the vector-math module."
+    },
+    {
+      "id": "KD-3",
+      "title": "Pure math, degrees, three decimal places",
+      "detail": "public/math.js touches no DOM, so node:test can import it. Angle is acos of the clamped cosine, converted to degrees. normalize and angleDegrees return null when either required vector has magnitude 0. The result panel formats with three decimal places; stored results keep full precision."
+    },
+    {
+      "id": "KD-4",
+      "title": "Snapshots, caps, and a storage factory",
+      "detail": "History stores component snapshots, not live library ids, so later edits or deletes do not rewrite the past. Calculation adds a target field of A or B for magnitude and normalize. createStore(storageArea) accepts localStorage in the browser and a memory map in tests. Named vectors cap at 40 and history at 30, newest first. Writes are try/caught."
+    },
+    {
+      "id": "KD-5",
+      "title": "One live result",
+      "detail": "Dot, cross, and angle always use A and B. Magnitude and normalize use the selected target, default A. Inputs recompute immediately. A result arrow is drawn only for cross and normalize. A fresh visit with an empty library starts from A = (1, 0, 0) and B = (0, 1, 0)."
+    }
+  ],
+  "requirements": [
+    "FR-1: The user can enter vectors A and B as numeric x, y, and z components.",
+    "FR-2: The user can compute the dot product of A and B and see a scalar.",
+    "FR-3: The user can compute the cross product A × B and see the resulting vector.",
+    "FR-4: The user can compute the magnitude of the selected vector, A or B.",
+    "FR-5: The user can compute the unit vector of the selected vector, A or B.",
+    "FR-6: The user can compute the angle between A and B in degrees, shown to three decimal places.",
+    "FR-7: A zero-length vector used by normalize or angle, and any non-numeric component, shows a clear message and no NaN.",
+    "FR-8: The right pane draws A and B, plus a result arrow when the result is a vector, on a light grid with an axis triad.",
+    "FR-9: The user can drag to orbit the view and use the wheel to zoom, without losing the origin.",
+    "FR-10: The user can save the current A or B under a name, load a saved vector into A or B, and delete it.",
+    "FR-11: The user can reopen a recent calculation and restore its operands, operation, target, and result.",
+    "FR-12: Named vectors and history persist in localStorage across reloads, within the stated caps.",
+    "FR-13: The workspace is a full-height split: a calm dark calculation panel on the left and a large dark viewport on the right."
+  ],
+  "blueprint": {
+    "stack": "Node.js 22 static server (node:http) + vanilla ES modules + node:test",
+    "runCommand": "npm start",
+    "entities": [
+      {
+        "name": "Vector",
+        "fields": [
+          "id",
+          "name",
+          "x",
+          "y",
+          "z"
+        ]
+      },
+      {
+        "name": "Calculation",
+        "fields": [
+          "id",
+          "operation",
+          "target",
+          "vectorA",
+          "vectorB",
+          "result",
+          "createdAt"
+        ]
+      }
+    ],
+    "screens": [
+      "Workspace: calculation panel, library, and history on the left; large 3D view on the right"
+    ]
+  },
+  "subtasks": [
+    {
+      "id": "01",
+      "name": "Project skeleton and server",
+      "slug": "skeleton",
+      "objective": "Create the zero-dependency app root, a static server, and the dark split shell the later modules fill in.",
+      "subagent": "generalPurpose",
+      "dependencies": [],
+      "deliverables": [
+        "package.json with type module, start and test scripts, and no dependencies",
+        "server.mjs that serves public/ and exports createServer",
+        "public/index.html split shell with an empty left panel and a canvas",
+        "public/styles.css full-height dark split layout",
+        "public/app.js ES module entry that loads without throwing"
+      ],
+      "definitionOfDone": [
+        "npm start serves index.html, styles.css, and app.js with matching MIME types",
+        "A missing file returns 404",
+        "A path that contains .. does not escape public/",
+        "The page shows a left column and a right-hand canvas"
+      ],
+      "implementationNotes": "App root is demos/3d-vector-calculator/. Start script is node server.mjs. Listen on process.env.PORT or 3000 only when the file is the main module, and export createServer so tests can bind port 0. Resolve paths inside public/ and reject traversal. MIME map: html, css, js, svg, and a binary fallback. Left column about 380px and scrollable; the canvas fills the rest. Colors lean dark: page near #0e1116, panel near #171b22, text near #e7ecf3. Script tag is type=module.",
+      "testingStrategy": "Boot createServer on port 0 and fetch /, /styles.css, a missing path, and a traversal path. Confirm status codes and that index.html contains the panel and canvas.",
+      "labels": [
+        "type:infra"
+      ]
+    },
+    {
+      "id": "02",
+      "name": "Vector math module",
+      "slug": "vector-math",
+      "objective": "Implement the five operations as pure functions with safe results for zero-length vectors.",
+      "subagent": "generalPurpose",
+      "dependencies": [
+        "01"
+      ],
+      "deliverables": [
+        "public/math.js exporting dot, cross, magnitude, normalize, and angleDegrees",
+        "null returns from normalize and angleDegrees when a required vector has length 0",
+        "angleDegrees in degrees with the cosine clamped to [-1, 1]",
+        "formatNumber using three decimal places"
+      ],
+      "definitionOfDone": [
+        "i·j is 0, i×j is (0, 0, 1), magnitude of (3, 4, 0) is 5, and normalize(2, 0, 0) is (1, 0, 0)",
+        "The angle between i and j is 90, between i and 2i is 0, and between i and -i is 180",
+        "normalize and angleDegrees of a zero vector return null",
+        "math.js imports no DOM and no other local module"
+      ],
+      "implementationNotes": "Vectors are plain {x, y, z}. Cross product is right-handed. angleDegrees is acos(clamped dot / (|a||b|)) times 180/π. Treat magnitude below 1e-12 as zero. formatNumber uses toFixed(3) and does not change the numeric result. Do not import storage.js or scene.js.",
+      "testingStrategy": "Import the exports from node:test and assert the fixtures above, including a cosine slightly outside [-1, 1] still returning a finite angle.",
+      "labels": [
+        "type:feature"
+      ]
+    },
+    {
+      "id": "03",
+      "name": "Library and history storage",
+      "slug": "storage",
+      "objective": "Persist named vectors and calculation snapshots in a swappable storage area with caps.",
+      "subagent": "generalPurpose",
+      "dependencies": [
+        "01"
+      ],
+      "deliverables": [
+        "public/storage.js exporting createStore(storageArea)",
+        "save, list, and delete for named vectors",
+        "append and list for calculation history, newest first",
+        "caps of 40 named vectors and 30 history entries, with write failures caught"
+      ],
+      "definitionOfDone": [
+        "A saved vector round-trips through a memory storage area with id, name, x, y, and z",
+        "Deleting a vector removes only that id",
+        "Appending 31 calculations leaves the 30 newest",
+        "A storage area that throws on setItem does not crash the caller"
+      ],
+      "implementationNotes": "Keys are 3d-vector-calculator:vectors and 3d-vector-calculator:history. Ids use crypto.randomUUID when present, otherwise a time-and-random string. vectorA and vectorB are snapshots {name, x, y, z}. result is {kind: scalar|vector|error, value or x,y,z or message}. target is A or B. createdAt is an ISO string. Do not import math.js. The browser passes localStorage; tests pass a map with getItem and setItem.",
+      "testingStrategy": "Drive createStore with an in-memory map in node:test. Cover save, list, delete, history order, the cap, and a setItem that throws.",
+      "labels": [
+        "type:data"
+      ]
+    },
+    {
+      "id": "04",
+      "name": "Canvas vector scene",
+      "slug": "scene",
+      "objective": "Draw the grid, axes, and arrows in perspective and let the user orbit and zoom.",
+      "subagent": "generalPurpose",
+      "dependencies": [
+        "01"
+      ],
+      "deliverables": [
+        "public/scene.js exporting createScene(canvas) and a pure project(point, camera)",
+        "an XZ grid and an RGB axis triad on a dark canvas",
+        "color-coded arrows for A, B, and an optional result vector, plus a small legend",
+        "pointer-drag orbit and wheel zoom that keep the view framed on the origin"
+      ],
+      "definitionOfDone": [
+        "project() maps the origin to the view center for the default camera",
+        "A point on the camera's up axis projects above the origin, and a point to the camera's right projects to the right",
+        "createScene does not touch document or window at import time",
+        "scene.js does not import math.js or storage.js"
+      ],
+      "implementationNotes": "Y-up, right-handed, perspective. Default camera looks at the origin from a front-right, slightly raised position. Arrow colors: A #3ee0c5, B #ffb020, result #e85dff; axes X #ff5a5a, Y #5dff7a, Z #5aa6ff. Draw arrowheads in screen space. Frame distance so the longest arrow spans about 70% of the view, with a minimum world extent of 2. Honor devicePixelRatio and resize with the canvas parent. Keep camera cross and normalize local to this file so the slice stays independent. Module top level must not read document.",
+      "testingStrategy": "Import project in node:test with a fixed camera and assert center, up, and right. Do not require a canvas or a browser.",
+      "labels": [
+        "type:ui"
+      ]
+    },
+    {
+      "id": "05",
+      "name": "Calculation workspace",
+      "slug": "workspace",
+      "objective": "Wire the left panel to the math, storage, and scene so the five operations, library, and history work live.",
+      "subagent": "generalPurpose",
+      "dependencies": [
+        "01",
+        "02",
+        "03",
+        "04"
+      ],
+      "deliverables": [
+        "public/index.html controls for both vectors, the operation, the unary target, the result, the library, and history",
+        "public/app.js recomputing on input and redrawing arrows through createScene",
+        "a message region for zero-length and non-numeric input with no NaN shown",
+        "save, load into A or B, and delete for named vectors",
+        "history rows that restore operands, operation, target, and result"
+      ],
+      "definitionOfDone": [
+        "Changing a component or operation updates the formatted result without a submit button",
+        "Cross product and normalize draw a result arrow; dot, magnitude, and angle do not",
+        "Magnitude and normalize follow the A/B target; dot, cross, and angle use both vectors",
+        "After a reload, saved vectors and history are still listed and a history row restores that calculation",
+        "Empty library and empty history each show a short empty state, and the first visit defaults to i and j"
+      ],
+      "implementationNotes": "Import math.js, storage.js, and scene.js from app.js. Pass localStorage to createStore. Operation values are dot, cross, magnitude, normalize, and angle. Format displayed numbers with formatNumber and append a degree sign for angles. On null math results, show a specific sentence such as that the vector has zero length. Catch storage errors and show that the browser could not save. Legend and canvas stay in the right pane. Extend the skeleton CSS for inputs, segmented operations, lists, focus, and the message; do not replace the split layout.",
+      "testingStrategy": "Verify through the pure modules' tests plus a manual pass: each operation, the zero vector, save and reload, load into A and B, delete, and history restore. Confirm the result text and which arrows are requested.",
+      "labels": [
+        "type:ui",
+        "type:feature"
+      ]
+    },
+    {
+      "id": "06",
+      "name": "Tests and README",
+      "slug": "tests-readme",
+      "objective": "Lock the math, storage, projection, and server behavior in node:test, and document how to run the app.",
+      "subagent": "generalPurpose",
+      "dependencies": [
+        "01",
+        "02",
+        "03",
+        "04",
+        "05"
+      ],
+      "deliverables": [
+        "test/math.test.mjs for the five operations, null guards, clamping, and formatNumber",
+        "test/storage.test.mjs using an in-memory storage area",
+        "test/scene.test.mjs for project() without a canvas",
+        "test/server.test.mjs for 200, MIME, 404, and traversal",
+        "README.md with npm start, npm test, the five operations, and localStorage behavior"
+      ],
+      "definitionOfDone": [
+        "npm test passes with node:test and no extra runner",
+        "README states the app root command, the default port, and that the 3D view is canvas rather than Three.js",
+        "Tests cover the fixtures named in the vector-math subtask and the storage caps"
+      ],
+      "implementationNotes": "Test files are ESM and import from ../public/ and ../server.mjs. Server test uses port 0 and closes the server. README is short: what the app does, the split layout, degrees and three decimals, library and history caps, and the two npm scripts. Do not add dependencies to package.json.",
+      "testingStrategy": "Run npm test from demos/3d-vector-calculator and confirm every test file passes.",
+      "labels": [
+        "type:test",
+        "type:docs"
+      ]
+    }
+  ],
+  "definitionOfDone": [
+    "All subtasks completed",
+    "npm test passes",
+    "npm start serves the dark split workspace with zero npm dependencies",
+    "The five operations match the fixture values and zero-length inputs do not show NaN",
+    "Named vectors and history survive a reload and can be reused"
+  ],
+  "risks": [
+    {
+      "risk": "acos receives a cosine slightly outside [-1, 1] for nearly parallel vectors and the angle becomes NaN",
+      "likelihood": "Medium",
+      "impact": "High",
+      "mitigation": "Clamp the cosine to [-1, 1], treat magnitude below 1e-12 as zero, and cover parallel, anti-parallel, and over-range fixtures in test/math.test.mjs"
+    },
+    {
+      "risk": "localStorage throws in private mode or when the quota is full, so saves silently disappear",
+      "likelihood": "Medium",
+      "impact": "Medium",
+      "mitigation": "Cap named vectors at 40 and history at 30, catch setItem failures in createStore, and show a save-failed message in the panel"
+    },
+    {
+      "risk": "The custom projection clips long arrows or flattens depth, so the view is hard to read compared with the requested Three.js scene",
+      "likelihood": "Medium",
+      "impact": "Medium",
+      "mitigation": "Frame the camera to the longest arrow, keep a minimum extent of 2, offer orbit and zoom, and unit-test project() for center, up, and right"
+    }
+  ],
+  "rollbackPlan": [
+    "Delete demos/3d-vector-calculator/ and re-run the executor",
+    "Do not add npm packages while restoring; the app stays on node:http, vanilla modules, localStorage, and node:test"
+  ]
+}

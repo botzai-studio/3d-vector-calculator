@@ -1,0 +1,59 @@
+schema_version: 1
+subtask_id: "05"
+feature: 3D Vector Calculator
+assigned_agent: generalPurpose
+model: grok-4.7
+token_budget: 200000
+state: completed
+completed_at: 2026-11-13T09:48:03.237Z
+checklist:
+  - id: D01
+    text: public/index.html controls for both vectors, the operation, the unary
+      target, the result, the library, and history
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: D02
+    text: public/app.js recomputing on input and redrawing arrows through createScene
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: D03
+    text: a message region for zero-length and non-numeric input with no NaN shown
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: D04
+    text: save, load into A or B, and delete for named vectors
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: D05
+    text: history rows that restore operands, operation, target, and result
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD01
+    text: Changing a component or operation updates the formatted result without a
+      submit button
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD02
+    text: Cross product and normalize draw a result arrow; dot, magnitude, and angle
+      do not
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD03
+    text: Magnitude and normalize follow the A/B target; dot, cross, and angle use
+      both vectors
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD04
+    text: After a reload, saved vectors and history are still listed and a history
+      row restores that calculation
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+  - id: DoD05
+    text: Empty library and empty history each show a short empty state, and the
+      first visit defaults to i and j
+    done: true
+    evidence_path: demos/3d-vector-calculator/
+artifacts: []
+errors: []
+notes: ""
+extra: {}

@@ -10,19 +10,19 @@ aggregate_progress:
 subtasks:
   - subtask_id: "01"
     state: completed
-    status_path: specs/20261112-3d-vector-calculator/status/subtask-01-3d-vector-calculator-skeleton-20261112.status.yml
+    status_path: spec/status/subtask-01-3d-vector-calculator-skeleton-20261112.status.yml
   - subtask_id: "02"
     state: completed
-    status_path: specs/20261112-3d-vector-calculator/status/subtask-02-3d-vector-calculator-vector-math-20261112.status.yml
+    status_path: spec/status/subtask-02-3d-vector-calculator-vector-math-20261112.status.yml
   - subtask_id: "03"
     state: completed
-    status_path: specs/20261112-3d-vector-calculator/status/subtask-03-3d-vector-calculator-storage-20261112.status.yml
+    status_path: spec/status/subtask-03-3d-vector-calculator-storage-20261112.status.yml
   - subtask_id: "04"
     state: completed
-    status_path: specs/20261112-3d-vector-calculator/status/subtask-04-3d-vector-calculator-scene-20261112.status.yml
+    status_path: spec/status/subtask-04-3d-vector-calculator-scene-20261112.status.yml
   - subtask_id: "05"
     state: completed
-    status_path: specs/20261112-3d-vector-calculator/status/subtask-05-3d-vector-calculator-workspace-20261112.status.yml
+    status_path: spec/status/subtask-05-3d-vector-calculator-workspace-20261112.status.yml
   - subtask_id: "06"
     state: completed
-    status_path: specs/20261112-3d-vector-calculator/status/subtask-06-3d-vector-calculator-tests-readme-20261112.status.yml
+    status_path: spec/status/subtask-06-3d-vector-calculator-tests-readme-20261112.status.yml

@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prestart": "node scripts/ensure-cert.mjs",
     "start": "node server.mjs",
+    "pretest": "node scripts/ensure-cert.mjs",
     "test": "node --test",
     "agent:dev": "agent-sdk dev --dir .",
     "agent:serve": "agent-sdk serve --dir .",

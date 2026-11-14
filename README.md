@@ -1,5 +1,9 @@
 # 3D Vector Calculator
 
+Compute dot product, cross product, magnitude, normalize, and the angle between two 3D vectors, with a live arrow view. This is a public demo built in [Agent Studio](https://studio.botz.ai).
+
+![3D Vector Calculator](docs/screenshot.png)
+
 A desktop workspace for checking 3D vector math. The page is a full-height split: a calculation panel on the left, and a large view on the right. The view is a 2D canvas with a hand-rolled perspective projection (Y-up, right-handed). It is not Three.js.
 
 Dot, cross, magnitude, normalize, and angle update as you type. Angles are in degrees and displayed numbers use three decimal places. A fresh visit starts at A = (1, 0, 0) and B = (0, 1, 0). Magnitude and normalize use the selected vector; dot, cross, and angle use both. A zero-length vector shows a message instead of NaN.
@@ -10,13 +14,13 @@ Named vectors and calculation history stay in `localStorage`. The library key is
 
 ## Run
 
-From `demos/3d-vector-calculator`:
+From the repository root:
 
 ```bash
 npm start
 ```
 
-That runs `node server.mjs` and serves `public/` at <https://localhost:4100>. The certificate is the local file `certs/localhost.crt`. Set `PORT` to choose another port. There are no npm dependencies.
+That runs `node server.mjs` and serves `public/` at <https://localhost:4100>. On first start, `scripts/ensure-cert.mjs` creates a self-signed localhost certificate in `certs/` with `openssl`; that folder is not committed. Set `PORT` to choose another port. There are no npm dependencies.
 
 ```bash
 npm test
@@ -27,3 +31,12 @@ That runs `node --test` on the math, storage, projection, and server tests. No e
 ## Agent SDK companion
 
 This demo also includes a file-first Agent SDK project under `bot/` with smoke evals under `evals/`. See [agent run instructions](AGENT.md). SDK tooling is optional; the browser app still runs and tests without installing it.
+
+## Repository layout
+
+- `public/`, `server.mjs`, `test/`: the app and its tests.
+- `bot/`, `evals/`: the Agent SDK companion.
+- `spec/`: the spec, subtasks, and status files the app was built from.
+- `.studio/`: Agent Studio state for this demo: the board record (`board.json`, issues labelled `demo:3d-vector-calculator` in this repo), demo metadata, and review evidence.
+
+Cards for this demo are issues in this repository. Agent Studio opens review pull requests here, and merging one completes the run.

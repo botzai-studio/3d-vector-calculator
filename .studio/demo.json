@@ -56,11 +56,11 @@
   },
   "hostLimitAcknowledged": true,
   "board": {
-    "url": "https://github.com/orgs/zotoio/projects/4",
+    "url": "https://github.com/botzai-studio/3d-vector-calculator/issues?q=label%3Ademo%3A3d-vector-calculator",
     "mode": "live",
-    "owner": "zotoio",
-    "repo": "grok-agent-studio",
-    "projectNumber": 4
+    "owner": "botzai-studio",
+    "repo": "3d-vector-calculator",
+    "projectNumber": 0
   },
   "runs": [
     {

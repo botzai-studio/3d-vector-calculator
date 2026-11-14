@@ -1,60 +1,65 @@
 {
   "version": 1,
   "mode": "live",
-  "owner": "zotoio",
-  "repo": "grok-agent-studio",
-  "repositoryId": "R_kgDOVmzb5A",
+  "owner": "botzai-studio",
+  "repo": "3d-vector-calculator",
+  "repositoryId": "R_kgDOVuOwHg",
   "defaultBranch": "main",
-  "projectId": "PVT_kwDOAjS5Ic4BrTUn",
-  "projectNumber": 4,
-  "url": "https://github.com/orgs/zotoio/projects/4",
+  "projectId": "",
+  "projectNumber": 0,
+  "url": "https://github.com/botzai-studio/3d-vector-calculator/issues?q=label%3Ademo%3A3d-vector-calculator",
   "title": "Demo: 3D Vector Calculator",
-  "fieldId": "PVTSSF_lADOAjS5Ic4BrTUnzhpmptU",
-  "fieldName": "Status",
+  "fieldId": "",
+  "fieldName": "column",
   "options": {
-    "Backlog": "6b622cf4",
-    "Ready": "e8c9ba0b",
-    "In progress": "a87059c3",
-    "Review": "872813cd",
-    "Done": "ed75fb8e"
+    "Backlog": "Backlog",
+    "Ready": "Ready",
+    "In progress": "In progress",
+    "Review": "Review",
+    "Done": "Done"
   },
+  "issueLabel": "demo:3d-vector-calculator",
   "specItems": {
     "01": {
-      "issueId": "I_kwDOVmzb5M8AAAABenaSDA",
-      "number": 23,
-      "itemId": "PVTI_lADOAjS5Ic4BrTUnzhIIm7g",
-      "url": "https://github.com/zotoio/grok-agent-studio/issues/23"
+      "issueId": "I_kwDOVuOwHs8AAAABfOTfgg",
+      "number": 1,
+      "itemId": "I_kwDOVuOwHs8AAAABfOTfgg",
+      "url": "https://github.com/botzai-studio/3d-vector-calculator/issues/1"
     },
     "02": {
-      "issueId": "I_kwDOVmzb5M8AAAABenaU2w",
-      "number": 24,
-      "itemId": "PVTI_lADOAjS5Ic4BrTUnzhIInAc",
-      "url": "https://github.com/zotoio/grok-agent-studio/issues/24"
+      "issueId": "I_kwDOVuOwHs8AAAABfOTltw",
+      "number": 2,
+      "itemId": "I_kwDOVuOwHs8AAAABfOTltw",
+      "url": "https://github.com/botzai-studio/3d-vector-calculator/issues/2"
     },
     "03": {
-      "issueId": "I_kwDOVmzb5M8AAAABenaX7A",
-      "number": 25,
-      "itemId": "PVTI_lADOAjS5Ic4BrTUnzhIInE8",
-      "url": "https://github.com/zotoio/grok-agent-studio/issues/25"
+      "issueId": "I_kwDOVuOwHs8AAAABfOTo5A",
+      "number": 3,
+      "itemId": "I_kwDOVuOwHs8AAAABfOTo5A",
+      "url": "https://github.com/botzai-studio/3d-vector-calculator/issues/3"
     },
     "04": {
-      "issueId": "I_kwDOVmzb5M8AAAABenabYg",
-      "number": 26,
-      "itemId": "PVTI_lADOAjS5Ic4BrTUnzhIInJ8",
-      "url": "https://github.com/zotoio/grok-agent-studio/issues/26"
+      "issueId": "I_kwDOVuOwHs8AAAABfOTsvw",
+      "number": 4,
+      "itemId": "I_kwDOVuOwHs8AAAABfOTsvw",
+      "url": "https://github.com/botzai-studio/3d-vector-calculator/issues/4"
     },
     "05": {
-      "issueId": "I_kwDOVmzb5M8AAAABenaeMA",
-      "number": 27,
-      "itemId": "PVTI_lADOAjS5Ic4BrTUnzhIInNo",
-      "url": "https://github.com/zotoio/grok-agent-studio/issues/27"
+      "issueId": "I_kwDOVuOwHs8AAAABfOTwQA",
+      "number": 5,
+      "itemId": "I_kwDOVuOwHs8AAAABfOTwQA",
+      "url": "https://github.com/botzai-studio/3d-vector-calculator/issues/5"
     },
     "06": {
-      "issueId": "I_kwDOVmzb5M8AAAABenahWg",
-      "number": 28,
-      "itemId": "PVTI_lADOAjS5Ic4BrTUnzhIInR8",
-      "url": "https://github.com/zotoio/grok-agent-studio/issues/28"
+      "issueId": "I_kwDOVuOwHs8AAAABfOTzvQ",
+      "number": 6,
+      "itemId": "I_kwDOVuOwHs8AAAABfOTzvQ",
+      "url": "https://github.com/botzai-studio/3d-vector-calculator/issues/6"
     }
   },
-  "createdAt": "2026-11-12T12:14:08.291Z"
+  "createdAt": "2026-11-14T13:07:28.424Z",
+  "paths": {
+    "demos/3d-vector-calculator/": "",
+    "specs/20261112-3d-vector-calculator/": "spec/"
+  }
 }

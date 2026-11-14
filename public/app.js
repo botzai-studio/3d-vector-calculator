@@ -1,4 +1,19 @@
-import { formatSweepValue, sampleSweep } from "./demo.js";
+import {
+  ANIMATION_TYPES,
+  MOTION_BLEND_MS,
+  blendPresentations,
+  blendSweep,
+  damp,
+  easeInOutCubic,
+  formatSweepValue,
+  nextAnimationStep,
+  planeOpacity,
+  revealWires,
+  sampleSweep,
+  sweepWires,
+  tracePlane,
+  wireOpacity,
+} from "./demo.js";
 import { angleDegrees, cross, dot, formatNumber, magnitude, normalize } from "./math.js";
 import { createScene } from "./scene.js";
 import { VECTOR_CAP, createStore } from "./storage.js";
@@ -6,8 +21,21 @@ import { VECTOR_CAP, createStore } from "./storage.js";
 const COMPONENT = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i;
 const ZERO = 1e-12;
 const HISTORY_DELAY = 280;
-const DEMO_IDLE_NOTE = "Sweeps A and B with easing so the arrows follow.";
-const DEMO_RUN_NOTE = "Sweeping A and B. The arrows ease through the view.";
+const DEMO_IDLE_NOTE = "Press Animate to orbit A and B. Rotation and auto changes start on, and old traces fade.";
+const MOTION_NOTES = {
+  ease: "Ease slows into each pose.",
+  glide: "Glide holds a steady speed along a squircle.",
+  arc: "Arc follows great circles between poses.",
+  orbit: "Orbit weaves a lissajous around the mesh.",
+  bloom: "Bloom opens petal trails.",
+  lattice: "Lattice walks the edges of an octahedron.",
+};
+const AUTO_STEP_MS = 9000;
+const PLANE_STEP_MS = 2300;
+const CAMERA_SPIN = 0.00015;
+const SPIN_TAU_MS = 420;
+const EXTENT_TAU_MS = 520;
+const PLANE_COLORS = ["#3ee0c5", "#ffb020", "#e85dff", "#22d3ee"];
 
 const OPERATIONS = new Set(["dot", "cross", "magnitude", "normalize", "angle"]);
 const UNARY = new Set(["magnitude", "normalize"]);
@@ -359,13 +387,33 @@ export function mountWorkspace(root = globalThis.document) {
   let editGeneration = 0;
   let historyTimer = 0;
   let demoRunning = false;
+  let settling = false;
   let demoFrame = 0;
   let demoElapsed = 0;
+  let playMs = 0;
+  let lastAutoMs = 0;
+  let lastPlaneMs = 0;
   let demoLastFrame = 0;
   let demoOrigin = null;
+  let motion = "orbit";
+  let handoff = null;
+  let opHandoff = null;
+  let opShown = null;
+  let spin = 0;
+  let frameDelta = 0;
+  let wireCaches = new Map();
+  let blendFades = [];
+  let wireAlpha = 1;
+  let visibleWires = null;
+  let wireBounds = null;
+  let wireHead = null;
+  let fading = [];
+  let planes = [];
+  let planeSerial = 0;
   const view = root.defaultView || globalThis;
   const demoButton = root.querySelector("#demo-toggle");
   const demoNote = root.querySelector("#demo-note");
+  const demoBar = root.querySelector(".demo-bar");
   const useFrame = !!(view && typeof view.requestAnimationFrame === "function");
 
   function byId(id) {
@@ -465,11 +513,20 @@ export function mountWorkspace(root = globalThis.document) {
     else if (storageNote) setMessage(storageNote, "warn");
     else setMessage("");
 
+    const shown = presentedResult(current.a, current.b, described.arrow);
     if (scene) {
       scene.setVectors({
         a: described.sceneA,
         b: described.sceneB,
-        result: ARROW_OPS.has(current.operation) ? described.arrow : null,
+        result: shown.alpha > 0.02 ? shown.arrow : null,
+        resultAlpha: shown.alpha,
+        wires: visibleWires,
+        wireAlpha,
+        wireBounds,
+        fading: fadingView().concat(blendFades),
+        planes: planeView(),
+        wireHead,
+        extentFollow: extentFollowAmount(),
       });
     }
     return { current, described };
@@ -690,12 +747,141 @@ export function mountWorkspace(root = globalThis.document) {
     byId(`${prefix}-z`).value = formatSweepValue(vector.z);
   }
 
+  function readMotion() {
+    const selected = root.querySelector('input[name="motion"]:checked');
+    const value = selected && selected.value;
+    return ANIMATION_TYPES.includes(value) ? value : "orbit";
+  }
+
+  function readChecked(id, fallback) {
+    const input = root.querySelector(`#${id}`);
+    if (!input) return fallback;
+    return !!input.checked;
+  }
+
+  function motionNote(running) {
+    if (!running) return DEMO_IDLE_NOTE;
+    const detail = MOTION_NOTES[motion] || MOTION_NOTES.orbit;
+    let note = `On. ${detail} Older wires and trace planes fade.`;
+    if (readChecked("rotate-toggle", true)) note += " The view turns slowly.";
+    if (readChecked("auto-toggle", true)) note += " Auto changes the motion and operation.";
+    return note;
+  }
+
+  function clearVisuals() {
+    visibleWires = null;
+    wireBounds = null;
+    wireCaches = new Map();
+    blendFades = [];
+    wireAlpha = 1;
+    handoff = null;
+    opHandoff = null;
+    wireHead = null;
+    fading = [];
+    planes = [];
+    settling = false;
+    if (!demoRunning && demoFrame) {
+      cancelFrame(demoFrame);
+      demoFrame = 0;
+    }
+  }
+
+  function extentFollowAmount() {
+    if (!demoRunning && !settling) return null;
+    if (!(frameDelta > 0)) return 0;
+    return 1 - Math.exp(-frameDelta / EXTENT_TAU_MS);
+  }
+
+  function followSpin(delta) {
+    const target = demoRunning && readChecked("rotate-toggle", true) ? CAMERA_SPIN : 0;
+    spin = damp(spin, target, delta, SPIN_TAU_MS);
+    return spin;
+  }
+
+  function applySpin(delta) {
+    const rate = followSpin(delta);
+    if (!(Math.abs(rate) > 1e-8) || !scene || typeof scene.orbitBy !== "function") return;
+    scene.orbitBy(delta * rate);
+  }
+
+  function cloneWires(wires) {
+    if (!wires) return null;
+    return {
+      a: wires.a ? wires.a.slice() : [],
+      b: wires.b ? wires.b.slice() : [],
+      cross: wires.cross ? wires.cross.slice() : [],
+      shadowA: wires.shadowA ? wires.shadowA.slice() : [],
+      shadowB: wires.shadowB ? wires.shadowB.slice() : [],
+      spans: wires.spans ? wires.spans.slice() : [],
+      drops: wires.drops ? wires.drops.slice() : [],
+    };
+  }
+
+  function retireWires() {
+    if (!visibleWires || !visibleWires.a || visibleWires.a.length < 2) return;
+    fading.push({ wires: cloneWires(visibleWires), age: 0 });
+    if (fading.length > 4) fading.shift();
+  }
+
+  function fadingView() {
+    const layers = [];
+    const keep = [];
+    for (const layer of fading) {
+      const alpha = wireOpacity(layer.age);
+      if (!(alpha > 0.02) || !layer.wires) continue;
+      keep.push(layer);
+      layers.push({ wires: layer.wires, alpha });
+    }
+    fading = keep;
+    return layers;
+  }
+
+  function planeView() {
+    const view = [];
+    const keep = [];
+    for (const plane of planes) {
+      const alpha = planeOpacity(playMs - plane.born);
+      if (!(alpha > 0.015)) continue;
+      keep.push(plane);
+      view.push({ points: plane.points, alpha, color: plane.color });
+    }
+    planes = keep;
+    return view;
+  }
+
+  function hasTrace() {
+    return !!(visibleWires || wireBounds || fading.length || planes.length);
+  }
+
+  function wiresFor(motionName) {
+    let cached = wireCaches.get(motionName);
+    if (!cached) {
+      cached = sweepWires(motionName);
+      wireCaches.set(motionName, cached);
+    }
+    return cached;
+  }
+
+  function mergedBounds(caches) {
+    if (caches.length === 1) return caches[0];
+    const merged = { a: [], b: [], cross: [], shadowA: [], shadowB: [], spans: [], drops: [] };
+    for (const wires of caches) {
+      if (!wires) continue;
+      if (wires.a) merged.a.push(...wires.a);
+      if (wires.b) merged.b.push(...wires.b);
+      if (wires.cross) merged.cross.push(...wires.cross);
+    }
+    return merged;
+  }
+
   function paintDemo(running) {
     panel.classList.toggle("is-demo", running);
     if (!demoButton) return;
     demoButton.setAttribute("aria-pressed", running ? "true" : "false");
-    demoButton.textContent = running ? "Stop demo" : "Play demo";
-    if (demoNote) demoNote.textContent = running ? DEMO_RUN_NOTE : DEMO_IDLE_NOTE;
+    demoButton.textContent = "Animate";
+    if (running) demoButton.setAttribute("aria-label", "Stop animation");
+    else demoButton.removeAttribute("aria-label");
+    if (demoNote) demoNote.textContent = motionNote(running);
     const live = running ? "off" : "polite";
     const result = byId("result-value");
     const message = byId("message");
@@ -703,34 +889,272 @@ export function mountWorkspace(root = globalThis.document) {
     if (message) message.setAttribute("aria-live", live);
   }
 
+  function pruneHandoff(node, now) {
+    if (!node) return null;
+    if (now - node.startMs >= MOTION_BLEND_MS) return null;
+    node.from = pruneHandoff(node.from, now);
+    return node;
+  }
+
+  function flattenHandoff(node, now, scale, out) {
+    if (!node || !(scale > 0)) return;
+    const eased = easeInOutCubic((now - node.startMs) / MOTION_BLEND_MS);
+    const rest = scale * (1 - eased);
+    const next = scale * eased;
+    if (node.from) flattenHandoff(node.from, now, rest, out);
+    else if (rest > 0.001) out.push({ motion: node.fromMotion, weight: rest });
+    if (next > 0.001) out.push({ motion: node.toMotion, weight: next });
+  }
+
+  function mergeLayers(list) {
+    const map = new Map();
+    const order = [];
+    for (const layer of list) {
+      const existing = map.get(layer.motion);
+      if (existing) {
+        existing.weight += layer.weight;
+        continue;
+      }
+      const item = { motion: layer.motion, weight: layer.weight };
+      map.set(layer.motion, item);
+      order.push(item);
+    }
+    return order;
+  }
+
+  function evalHandoff(node, elapsed) {
+    const to = sampleSweep(elapsed, demoOrigin, { motion: node.toMotion });
+    const from = node.from
+      ? evalHandoff(node.from, elapsed)
+      : sampleSweep(elapsed, demoOrigin, { motion: node.fromMotion });
+    const mixed = blendSweep(from, to, (playMs - node.startMs) / MOTION_BLEND_MS);
+    return {
+      a: mixed.a,
+      b: mixed.b,
+      phase: "blend",
+      motion: node.toMotion,
+      progress: to.progress,
+      laps: to.laps,
+    };
+  }
+
+  function composeSweep(elapsed) {
+    handoff = pruneHandoff(handoff, playMs);
+    if (!handoff) {
+      const sample = sampleSweep(elapsed, demoOrigin, { motion });
+      return { sample, layers: [{ motion, weight: 1, sample }] };
+    }
+    const flat = [];
+    flattenHandoff(handoff, playMs, 1, flat);
+    const layers = mergeLayers(flat);
+    for (const layer of layers) {
+      layer.sample = sampleSweep(elapsed, demoOrigin, { motion: layer.motion });
+    }
+    if (layers.length === 0) {
+      const sample = sampleSweep(elapsed, demoOrigin, { motion });
+      return { sample, layers: [{ motion, weight: 1, sample }] };
+    }
+    return { sample: evalHandoff(handoff, elapsed), layers };
+  }
+
   function applySweep(elapsed) {
-    const sample = sampleSweep(elapsed, demoOrigin);
+    const view = composeSweep(elapsed);
+    const sample = view.sample;
     writeSweep("a", sample.a);
     writeSweep("b", sample.b);
+    let primary = view.layers[0];
+    for (const layer of view.layers) {
+      if (layer.weight > primary.weight) primary = layer;
+    }
+    const caches = [];
+    const extras = [];
+    for (const layer of view.layers) {
+      const wires = wiresFor(layer.sample ? layer.motion : motion);
+      caches.push(wires);
+      const revealed = revealWires(wires, layer.sample.progress, layer.sample.laps);
+      const head = layer.sample.laps >= 1 ? layer.sample.progress : 1;
+      if (layer === primary) {
+        visibleWires = revealed;
+        wireHead = head;
+        wireAlpha = view.layers.length > 1 ? layer.weight : 1;
+        continue;
+      }
+      if (!(layer.weight > 0.02) || !revealed || !revealed.a || revealed.a.length < 2) continue;
+      extras.push({ wires: revealed, alpha: layer.weight, head });
+    }
+    blendFades = extras;
+    wireBounds = mergedBounds(caches);
     renderCalculation();
+  }
+
+  function leafArrow(op, a, b) {
+    const arrow = describeCalculation({
+      operation: op.operation,
+      target: op.target,
+      a,
+      b,
+    }).arrow;
+    return { arrow, alpha: arrow ? 1 : 0 };
+  }
+
+  function presentOp(node, a, b) {
+    const to = leafArrow(node.toOp, a, b);
+    const from = node.from ? presentOp(node.from, a, b) : leafArrow(node.fromOp, a, b);
+    return blendPresentations(from, to, (playMs - node.startMs) / MOTION_BLEND_MS);
+  }
+
+  function presentedResult(a, b, liveArrow) {
+    const operation = readOperation();
+    const target = readTarget();
+    if (!demoRunning) {
+      if (settling && opHandoff) {
+        opHandoff = pruneHandoff(opHandoff, playMs);
+        if (opHandoff) return presentOp(opHandoff, a, b);
+      }
+      opHandoff = null;
+      opShown = { operation, target };
+      return { arrow: liveArrow, alpha: liveArrow ? 1 : 0 };
+    }
+    if (opShown && (opShown.operation !== operation || opShown.target !== target)) {
+      const active = opHandoff && playMs - opHandoff.startMs < MOTION_BLEND_MS ? opHandoff : null;
+      opHandoff = {
+        from: active,
+        fromOp: { operation: opShown.operation, target: opShown.target },
+        toOp: { operation, target },
+        startMs: playMs,
+      };
+    }
+    if (!opShown) opShown = { operation, target };
+    else opShown = { operation, target };
+    opHandoff = pruneHandoff(opHandoff, playMs);
+    if (!opHandoff) return { arrow: liveArrow, alpha: liveArrow ? 1 : 0 };
+    return presentOp(opHandoff, a, b);
+  }
+
+  function clockDelta(stamp) {
+    let delta = 0;
+    if (demoLastFrame > 0) {
+      const raw = stamp - demoLastFrame;
+      if (raw > 0) delta = Math.min(raw, 48);
+    }
+    demoLastFrame = stamp;
+    return delta;
+  }
+
+  function stampPlane() {
+    if (handoff) return;
+    const sample = sampleSweep(demoElapsed, demoOrigin, { motion });
+    if (sample.phase === "intro" || sample.phase === "blend") return;
+    const plane = tracePlane(wiresFor(motion), sample.progress);
+    if (!plane) return;
+    planes.push({
+      points: plane.points,
+      born: playMs,
+      color: PLANE_COLORS[planeSerial % PLANE_COLORS.length],
+    });
+    planeSerial += 1;
+    if (planes.length > 6) planes.shift();
+  }
+
+  function beginMotion(next) {
+    const active = handoff && playMs - handoff.startMs < MOTION_BLEND_MS ? handoff : null;
+    if (next === motion && (!active || active.toMotion === next)) {
+      paintDemo(true);
+      return;
+    }
+    // Keep the sweep clock. The new setting eases in from the pose already showing.
+    handoff = {
+      from: active,
+      fromMotion: motion,
+      toMotion: next,
+      startMs: playMs,
+    };
+    motion = next;
+    lastAutoMs = playMs;
+    paintDemo(true);
+    applySweep(demoElapsed);
+  }
+
+  function advanceSettings() {
+    const step = nextAnimationStep(motion, readOperation());
+    setRadio("motion", step.motion);
+    setRadio("operation", step.operation);
+    beginMotion(step.motion);
   }
 
   function demoTick(now) {
     if (!demoRunning) return;
     const stamp = typeof now === "number" && Number.isFinite(now) ? now : nowMs();
-    if (demoLastFrame > 0) {
-      const delta = stamp - demoLastFrame;
-      if (delta > 0) demoElapsed += Math.min(delta, 48);
+    const delta = clockDelta(stamp);
+    frameDelta = delta;
+    playMs += delta;
+    demoElapsed += delta;
+    for (const layer of fading) layer.age += delta;
+    applySpin(delta);
+    if (readChecked("auto-toggle", true) && playMs - lastAutoMs >= AUTO_STEP_MS) {
+      lastAutoMs = playMs;
+      advanceSettings();
+    } else {
+      if (playMs - lastPlaneMs >= PLANE_STEP_MS) {
+        lastPlaneMs = playMs;
+        stampPlane();
+      }
+      applySweep(demoElapsed);
     }
-    demoLastFrame = stamp;
-    applySweep(demoElapsed);
     demoFrame = frame(demoTick);
   }
 
-  function stopDemo(options = {}) {
-    if (!demoRunning) return;
-    demoRunning = false;
-    if (demoFrame) {
-      cancelFrame(demoFrame);
-      demoFrame = 0;
+  function settleTick(now) {
+    if (demoRunning) {
+      settling = false;
+      return;
     }
-    paintDemo(false);
-    if (options.commit) commitSoon(true);
+    const stamp = typeof now === "number" && Number.isFinite(now) ? now : nowMs();
+    const delta = clockDelta(stamp);
+    frameDelta = delta;
+    playMs += delta;
+    for (const layer of fading) layer.age += delta;
+    applySpin(delta);
+    const alive = fading.some((layer) => wireOpacity(layer.age) > 0.02)
+      || planes.some((plane) => planeOpacity(playMs - plane.born) > 0.02)
+      || Math.abs(spin) > 1e-7;
+    renderCalculation();
+    if (!alive) {
+      settling = false;
+      demoFrame = 0;
+      return;
+    }
+    demoFrame = frame(settleTick);
+  }
+
+  function startSettle() {
+    if (demoRunning) return;
+    if (fading.length === 0 && planes.length === 0 && !(Math.abs(spin) > 1e-7)) return;
+    if (settling && demoFrame) return;
+    settling = true;
+    demoLastFrame = 0;
+    demoFrame = frame(settleTick);
+  }
+
+  function stopDemo(options = {}) {
+    if (demoRunning) {
+      demoRunning = false;
+      if (demoFrame) {
+        cancelFrame(demoFrame);
+        demoFrame = 0;
+      }
+      settling = false;
+      paintDemo(false);
+      if (options.commit) commitSoon(true);
+    }
+    if (options.clearWires) {
+      const hadWires = hasTrace();
+      spin = 0;
+      clearVisuals();
+      if (hadWires) renderCalculation();
+      return;
+    }
+    startSettle();
   }
 
   function componentOr(id, fallback) {
@@ -740,10 +1164,16 @@ export function mountWorkspace(root = globalThis.document) {
 
   function startDemo() {
     if (demoRunning) return;
+    if (demoFrame) {
+      cancelFrame(demoFrame);
+      demoFrame = 0;
+    }
+    settling = false;
     flushHistory();
     storageNote = "";
     names.A = "";
     names.B = "";
+    motion = readMotion();
     demoOrigin = {
       a: {
         x: componentOr("a-x", 1),
@@ -757,7 +1187,21 @@ export function mountWorkspace(root = globalThis.document) {
       },
     };
     demoElapsed = 0;
+    playMs = 0;
+    lastAutoMs = 0;
+    lastPlaneMs = 0;
     demoLastFrame = 0;
+    planeSerial = 0;
+    fading = [];
+    planes = [];
+    wireCaches = new Map();
+    blendFades = [];
+    wireAlpha = 1;
+    handoff = null;
+    opHandoff = null;
+    frameDelta = 0;
+    wireHead = null;
+    visibleWires = null;
     demoRunning = true;
     paintDemo(true);
     applySweep(0);
@@ -765,9 +1209,52 @@ export function mountWorkspace(root = globalThis.document) {
   }
 
   function isDemoControl(target) {
-    if (!demoButton || !target) return false;
-    if (target === demoButton) return true;
-    return typeof demoButton.contains === "function" && demoButton.contains(target);
+    if (!demoBar || !target) return false;
+    if (target === demoBar) return true;
+    return typeof demoBar.contains === "function" && demoBar.contains(target);
+  }
+
+  function prefersReducedMotion() {
+    try {
+      return !!(view.matchMedia && view.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    } catch {
+      return false;
+    }
+  }
+
+  function onMotionChange() {
+    const next = readMotion();
+    if (!demoRunning) {
+      motion = next;
+      if (hasTrace()) {
+        retireWires();
+        visibleWires = null;
+        wireBounds = null;
+        wireCaches = new Map();
+        blendFades = [];
+        wireAlpha = 1;
+        handoff = null;
+        wireHead = null;
+        paintDemo(false);
+        renderCalculation();
+        startSettle();
+      } else {
+        paintDemo(false);
+      }
+      return;
+    }
+    if (next === motion) return;
+    beginMotion(next);
+  }
+
+  function keepsDemo(target) {
+    if (isDemoControl(target)) return true;
+    if (!target || typeof target.closest !== "function") return false;
+    if (target.closest("#target-field")) return true;
+    if (target.closest('input[name="operation"]')) return true;
+    const fieldset = target.closest("fieldset");
+    if (!fieldset || typeof fieldset.querySelector !== "function") return false;
+    return !!fieldset.querySelector('input[name="operation"]');
   }
 
   function endDemoSession() {
@@ -777,7 +1264,8 @@ export function mountWorkspace(root = globalThis.document) {
 
   function restore(entry) {
     if (!entry) return;
-    if (demoRunning) stopDemo();
+    if (demoRunning) stopDemo({ clearWires: true });
+    else if (hasTrace()) stopDemo({ clearWires: true });
     editGeneration += 1;
     if (historyTimer) {
       clearTimeout(historyTimer);
@@ -798,7 +1286,7 @@ export function mountWorkspace(root = globalThis.document) {
   }
 
   function loadInto(role, id) {
-    if (demoRunning) stopDemo();
+    if (demoRunning || hasTrace()) stopDemo({ clearWires: true });
     const vector = (safeStore(store, "listVectors") || []).find((item) => item.id === id);
     if (!vector) {
       renderLibrary();
@@ -812,7 +1300,7 @@ export function mountWorkspace(root = globalThis.document) {
   }
 
   function deleteNamed(id) {
-    if (demoRunning) stopDemo();
+    if (demoRunning || hasTrace()) stopDemo({ clearWires: true });
     const vectors = safeStore(store, "listVectors") || [];
     if (!vectors.some((item) => item.id === id)) {
       renderLibrary();
@@ -829,7 +1317,7 @@ export function mountWorkspace(root = globalThis.document) {
   }
 
   function saveNamed(role) {
-    if (demoRunning) stopDemo();
+    if (demoRunning || hasTrace()) stopDemo({ clearWires: true });
     const prefix = role === "B" ? "b" : "a";
     const parsed = readVector(prefix, role);
     if (!parsed.vector) {
@@ -875,7 +1363,27 @@ export function mountWorkspace(root = globalThis.document) {
     const editsVectorB = id === "b-x" || id === "b-y" || id === "b-z";
     const editsOperation = name === "operation" || name === "target";
     if (!editsVectorA && !editsVectorB && !editsOperation) return;
+    if (editsOperation && demoRunning) {
+      renderCalculation();
+      return;
+    }
     if (demoRunning) stopDemo();
+    if (editsOperation && hasTrace()) {
+      retireWires();
+      visibleWires = null;
+      wireBounds = null;
+      wireCaches = new Map();
+      blendFades = [];
+      wireAlpha = 1;
+      handoff = null;
+      wireHead = null;
+      storageNote = "";
+      renderCalculation();
+      startSettle();
+      commitSoon(true);
+      return;
+    }
+    clearVisuals();
     if (editsVectorA) names.A = "";
     if (editsVectorB) names.B = "";
     storageNote = "";
@@ -927,15 +1435,31 @@ export function mountWorkspace(root = globalThis.document) {
     });
   }
 
+  const motionPicker = root.querySelector(".motion-picker");
+  if (motionPicker && typeof motionPicker.addEventListener === "function") {
+    motionPicker.addEventListener("change", onMotionChange);
+  }
+
+  if (demoBar && typeof demoBar.addEventListener === "function") {
+    demoBar.addEventListener("change", (event) => {
+      const target = event.target;
+      if (!target) return;
+      if (target.id === "auto-toggle" && target.checked) lastAutoMs = playMs;
+      if (target.id === "rotate-toggle" || target.id === "auto-toggle") {
+        if (demoNote) demoNote.textContent = motionNote(demoRunning);
+      }
+    });
+  }
+
   panel.addEventListener("pointerdown", (event) => {
     if (!demoRunning) return;
-    if (isDemoControl(event.target)) return;
+    if (keepsDemo(event.target)) return;
     stopDemo();
   });
 
   panel.addEventListener("focusin", (event) => {
     if (!demoRunning) return;
-    if (isDemoControl(event.target)) return;
+    if (keepsDemo(event.target)) return;
     stopDemo();
   });
 
@@ -952,6 +1476,7 @@ export function mountWorkspace(root = globalThis.document) {
   renderCalculation();
   renderLibrary();
   renderHistory();
+  if (!prefersReducedMotion()) startDemo();
 
   return { panel, canvas, scene };
 }

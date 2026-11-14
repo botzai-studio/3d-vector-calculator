@@ -9,8 +9,16 @@
  * with the origin at the top left, or null when the point is behind the camera.
  *
  * createScene(canvas) draws an XZ grid, an RGB axis triad, and the arrows.
- * It returns { setVectors, resize, destroy, getCamera }. Calling createScene
- * again with the same canvas returns the existing scene.
+ * setVectors may also include wires and wireBounds: polylines retained from
+ * a sweep (tips, shadows, drops, A–B spans, and the A × B trail).
+ * fading is older wireframes with an alpha, planes are translucent trace
+ * plates, and wireHead fades the live trail behind the moving tips.
+ * wireAlpha and resultAlpha fade the live trace and the result arrow.
+ * extentFollow, when set, eases the camera distance toward the new frame.
+ * A starfield is drawn behind the grid. orbitBy yaws the camera around the
+ * origin unless the user is dragging.
+ * It returns { setVectors, orbitBy, resize, destroy, getCamera }. Calling
+ * createScene again with the same canvas returns the existing scene.
  */
 
 const COLOR = {
@@ -22,6 +30,7 @@ const COLOR = {
   a: "#3ee0c5",
   b: "#ffb020",
   result: "#e85dff",
+  span: "#22d3ee",
   axisX: "#ff5a5a",
   axisY: "#5dff7a",
   axisZ: "#5aa6ff",
@@ -38,6 +47,55 @@ const ZOOM_MIN = 0.2;
 const ZOOM_MAX = 6;
 const NEAR = 0.05;
 const ORIGIN = { x: 0, y: 0, z: 0 };
+const STAR_BRIGHT = "#f4f4f8";
+const STAR_COOL = "#22d3ee";
+const STAR_DIM = "#9a9ab0";
+
+function mulberry32(seed) {
+  let state = seed >>> 0;
+  return function next() {
+    state = (state + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function wrap01(value) {
+  const mod = value % 1;
+  return mod < 0 ? mod + 1 : mod;
+}
+
+/**
+ * Screen-space starfield. u and v are fractions of the view. depth is how
+ * far the star sits, so a camera turn shifts nearer stars a little more.
+ */
+export function createStarfield(count = 180, seed = 37) {
+  const total = Math.max(1, Math.round(count) || 180);
+  const random = mulberry32(seed >>> 0);
+  const stars = [];
+  for (let i = 0; i < total; i += 1) {
+    const mag = random();
+    const roll = random();
+    stars.push({
+      u: random(),
+      v: random(),
+      mag,
+      depth: 0.28 + random() * 0.72,
+      color: roll > 0.92 ? STAR_COOL : roll > 0.45 ? STAR_BRIGHT : STAR_DIM,
+    });
+  }
+  return stars;
+}
+
+const STARS = createStarfield(180, 37);
+
+/** Opacity of a trail point. `along` and `head` are fractions of the polyline. */
+function trailFactor(along, head) {
+  let behind = head - along;
+  behind -= Math.floor(behind);
+  return 0.28 + 0.72 * (1 - behind) ** 1.5;
+}
 
 const scenes = new WeakMap();
 
@@ -110,13 +168,29 @@ function frameDistance(worldExtent, fov, aspect) {
   return Math.max(worldExtent, 0.001) / denom;
 }
 
-function framedExtent(vectors) {
+function wireReach(wires, longest) {
+  if (!wires) return longest;
+  const groups = [wires.a, wires.b, wires.cross, wires.shadowA, wires.shadowB];
+  let reach = longest;
+  for (const group of groups) {
+    if (!Array.isArray(group)) continue;
+    for (const point of group) {
+      if (!isFinitePoint(point)) continue;
+      const len = lengthOf(point);
+      if (len > reach) reach = len;
+    }
+  }
+  return reach;
+}
+
+function framedExtent(vectors, wires) {
   let longest = 0;
   for (const vector of vectors) {
     if (!vector) continue;
     const len = lengthOf(vector);
     if (len > longest) longest = len;
   }
+  longest = wireReach(wires, longest);
   // Full view height. An arrow starts at the origin, so the view has to be
   // twice the length that should reach 70% of the way to the edge.
   const filled = longest > 0 ? (2 * longest) / ARROW_FILL : 0;
@@ -427,21 +501,200 @@ function drawAxes(ctx, camera, basis, dpr, step) {
   }
 }
 
-function drawVectors(ctx, camera, basis, dpr, vectors) {
+function strokeWorldSegment(ctx, from, to, camera, basis) {
+  const clipped = clipSegment(
+    toCameraSpace(from, camera.position, basis),
+    toCameraSpace(to, camera.position, basis),
+    NEAR,
+  );
+  if (!clipped) return null;
+  const start = projectCameraPoint(clipped[0], camera);
+  const end = projectCameraPoint(clipped[1], camera);
+  if (!start || !end) return null;
+  return { start, end };
+}
+
+function drawWorldPolyline(ctx, points, color, camera, basis, width, alpha, minLength, head) {
+  if (!points || points.length < 2 || !(alpha > 0.02)) return;
+  const trailed = typeof head === "number" && Number.isFinite(head);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  if (!trailed) {
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    let penDown = false;
+    for (let i = 1; i < points.length; i += 1) {
+      const from = points[i - 1];
+      const to = points[i];
+      if (minLength && (lengthOf(from) < minLength || lengthOf(to) < minLength)) {
+        penDown = false;
+        continue;
+      }
+      const segment = strokeWorldSegment(ctx, from, to, camera, basis);
+      if (!segment) {
+        penDown = false;
+        continue;
+      }
+      if (!penDown) {
+        ctx.moveTo(segment.start.x, segment.start.y);
+        penDown = true;
+      }
+      ctx.lineTo(segment.end.x, segment.end.y);
+    }
+    if (penDown) ctx.stroke();
+    ctx.globalAlpha = 1;
+    return;
+  }
+
+  const last = points.length - 1;
+  for (let i = 1; i < points.length; i += 1) {
+    const from = points[i - 1];
+    const to = points[i];
+    if (minLength && (lengthOf(from) < minLength || lengthOf(to) < minLength)) continue;
+    const fade = alpha * trailFactor(i / last, head);
+    if (!(fade > 0.02)) continue;
+    const segment = strokeWorldSegment(ctx, from, to, camera, basis);
+    if (!segment) continue;
+    ctx.globalAlpha = fade;
+    ctx.beginPath();
+    ctx.moveTo(segment.start.x, segment.start.y);
+    ctx.lineTo(segment.end.x, segment.end.y);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawWorldSegments(ctx, segments, color, camera, basis, width, alpha, head) {
+  if (!segments || segments.length === 0 || !(alpha > 0.02)) return;
+  const trailed = typeof head === "number" && Number.isFinite(head);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = "round";
+  if (!trailed) {
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    let any = false;
+    for (const segment of segments) {
+      if (!segment || segment.length < 2) continue;
+      const painted = strokeWorldSegment(ctx, segment[0], segment[1], camera, basis);
+      if (!painted) continue;
+      ctx.moveTo(painted.start.x, painted.start.y);
+      ctx.lineTo(painted.end.x, painted.end.y);
+      any = true;
+    }
+    if (any) ctx.stroke();
+    ctx.globalAlpha = 1;
+    return;
+  }
+
+  const last = Math.max(1, segments.length - 1);
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
+    if (!segment || segment.length < 2) continue;
+    const fade = alpha * trailFactor(index / last, head);
+    if (!(fade > 0.02)) continue;
+    const painted = strokeWorldSegment(ctx, segment[0], segment[1], camera, basis);
+    if (!painted) continue;
+    ctx.globalAlpha = fade;
+    ctx.beginPath();
+    ctx.moveTo(painted.start.x, painted.start.y);
+    ctx.lineTo(painted.end.x, painted.end.y);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawWires(ctx, camera, basis, dpr, wires, alpha = 1, head = null) {
+  if (!wires || !(alpha > 0.02)) return;
+  const hair = Math.max(1, dpr);
+  drawWorldPolyline(ctx, wires.shadowA, COLOR.a, camera, basis, hair, 0.28 * alpha, 0, head);
+  drawWorldPolyline(ctx, wires.shadowB, COLOR.b, camera, basis, hair, 0.28 * alpha, 0, head);
+  drawWorldSegments(ctx, wires.drops, COLOR.span, camera, basis, hair, 0.4 * alpha, head);
+  drawWorldSegments(ctx, wires.spans, COLOR.span, camera, basis, 1.15 * hair, 0.72 * alpha, head);
+  drawWorldPolyline(ctx, wires.cross, COLOR.result, camera, basis, 1.35 * hair, 0.85 * alpha, 0.08, head);
+  drawWorldPolyline(ctx, wires.a, COLOR.a, camera, basis, 1.7 * hair, 0.95 * alpha, 0, head);
+  drawWorldPolyline(ctx, wires.b, COLOR.b, camera, basis, 1.7 * hair, 0.95 * alpha, 0, head);
+}
+
+function drawStars(ctx, camera, dpr, yaw, pitch) {
+  const width = camera.width;
+  const height = camera.height;
+  for (const star of STARS) {
+    const x = wrap01(star.u + yaw * 0.11 * star.depth) * width;
+    const y = wrap01(star.v - pitch * 0.07 * star.depth) * height;
+    const radius = (0.55 + star.mag * 1.35) * dpr * (0.7 + star.depth * 0.45);
+    ctx.fillStyle = star.color;
+    ctx.globalAlpha = 0.22 + star.mag * 0.62;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    if (star.mag > 0.84) {
+      ctx.globalAlpha = 0.14;
+      ctx.beginPath();
+      ctx.arc(x, y, radius * 2.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawPlanes(ctx, camera, basis, dpr, planes) {
+  if (!planes || planes.length === 0) return;
+  for (const plane of planes) {
+    if (!plane || !(plane.alpha > 0.015) || !plane.points || plane.points.length < 3) continue;
+    const projected = [];
+    let hidden = false;
+    for (const point of plane.points) {
+      const space = toCameraSpace(point, camera.position, basis);
+      if (!(space.z > NEAR)) {
+        hidden = true;
+        break;
+      }
+      const screen = projectCameraPoint(space, camera);
+      if (!screen) {
+        hidden = true;
+        break;
+      }
+      projected.push(screen);
+    }
+    if (hidden || projected.length < 3) continue;
+    ctx.beginPath();
+    ctx.moveTo(projected[0].x, projected[0].y);
+    for (let i = 1; i < projected.length; i += 1) ctx.lineTo(projected[i].x, projected[i].y);
+    ctx.closePath();
+    ctx.globalAlpha = plane.alpha;
+    ctx.fillStyle = plane.color;
+    ctx.fill();
+    ctx.globalAlpha = Math.min(0.8, plane.alpha * 1.25);
+    ctx.lineWidth = Math.max(1, dpr);
+    ctx.strokeStyle = plane.color;
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawVectors(ctx, camera, basis, dpr, vectors, resultAlpha = 1) {
+  const fade = typeof resultAlpha === "number" && Number.isFinite(resultAlpha)
+    ? Math.min(1, Math.max(0, resultAlpha))
+    : 1;
   const items = [
-    { vector: vectors.a, color: COLOR.a },
-    { vector: vectors.b, color: COLOR.b },
-    { vector: vectors.result, color: COLOR.result },
+    { vector: vectors.a, color: COLOR.a, alpha: 1 },
+    { vector: vectors.b, color: COLOR.b, alpha: 1 },
+    { vector: vectors.result, color: COLOR.result, alpha: fade },
   ];
   const visible = [];
   for (const item of items) {
-    if (!item.vector || lengthOf(item.vector) < 1e-8) continue;
+    if (!item.vector || !(item.alpha > 0.02) || lengthOf(item.vector) < 1e-8) continue;
     const tip = toCameraSpace(item.vector, camera.position, basis);
-    visible.push({ vector: item.vector, color: item.color, depth: tip.z });
+    visible.push({ vector: item.vector, color: item.color, depth: tip.z, alpha: item.alpha });
   }
   visible.sort((a, b) => b.depth - a.depth);
   for (const item of visible) {
+    ctx.globalAlpha = item.alpha;
     drawWorldArrow(ctx, ORIGIN, item.vector, item.color, camera, basis, dpr, 14 * dpr, 2.6 * dpr);
+    ctx.globalAlpha = 1;
   }
 }
 
@@ -454,12 +707,14 @@ function drawOrigin(ctx, camera, dpr) {
   ctx.fill();
 }
 
-function drawLegend(ctx, dpr, showResult) {
+function drawLegend(ctx, dpr, showResult, showTrace, showPlane) {
   const items = [
     { label: "A", color: COLOR.a },
     { label: "B", color: COLOR.b },
   ];
   if (showResult) items.push({ label: "Result", color: COLOR.result });
+  if (showTrace) items.push({ label: "Trace", color: COLOR.span });
+  if (showPlane) items.push({ label: "Plane", color: COLOR.span });
 
   const fontSize = 13 * dpr;
   ctx.font = `600 ${fontSize}px "Segoe UI", system-ui, sans-serif`;
@@ -500,6 +755,78 @@ function drawLegend(ctx, dpr, showResult) {
   });
 }
 
+function normalizePolyline(list) {
+  if (!Array.isArray(list)) return [];
+  const points = [];
+  for (const point of list) {
+    const vector = asVector(point);
+    if (vector) points.push(vector);
+  }
+  return points;
+}
+
+function normalizeSegments(list) {
+  if (!Array.isArray(list)) return [];
+  const segments = [];
+  for (const segment of list) {
+    if (!segment || segment.length < 2) continue;
+    const from = asVector(segment[0]);
+    const to = asVector(segment[1]);
+    if (from && to) segments.push([from, to]);
+  }
+  return segments;
+}
+
+function normalizeFading(list) {
+  if (!Array.isArray(list)) return [];
+  const layers = [];
+  for (const layer of list) {
+    const wires = normalizeWires(layer && layer.wires);
+    const alpha = Number(layer && layer.alpha);
+    if (!wires || !(alpha > 0)) continue;
+    const rawHead = layer && layer.head;
+    layers.push({
+      wires,
+      alpha: Math.min(1, alpha),
+      head: typeof rawHead === "number" && Number.isFinite(rawHead) ? rawHead : null,
+    });
+  }
+  return layers;
+}
+
+function normalizePlanes(list) {
+  if (!Array.isArray(list)) return [];
+  const planes = [];
+  for (const plane of list) {
+    const points = normalizePolyline(plane && plane.points);
+    const alpha = Number(plane && plane.alpha);
+    if (points.length < 3 || !(alpha > 0)) continue;
+    const color = typeof plane.color === "string" && plane.color ? plane.color : COLOR.span;
+    planes.push({ points, alpha: Math.min(1, alpha), color });
+  }
+  return planes;
+}
+
+function normalizeWires(wires) {
+  if (!wires || typeof wires !== "object") return null;
+  const normalized = {
+    a: normalizePolyline(wires.a),
+    b: normalizePolyline(wires.b),
+    cross: normalizePolyline(wires.cross),
+    shadowA: normalizePolyline(wires.shadowA),
+    shadowB: normalizePolyline(wires.shadowB),
+    spans: normalizeSegments(wires.spans),
+    drops: normalizeSegments(wires.drops),
+  };
+  const count = normalized.a.length
+    + normalized.b.length
+    + normalized.cross.length
+    + normalized.spans.length
+    + normalized.drops.length;
+  if (count === 0) return null;
+  return normalized;
+}
+
 function readDevicePixelRatio() {
   if (typeof window === "undefined") return 1;
   const ratio = window.devicePixelRatio;
@@ -510,7 +837,10 @@ function readDevicePixelRatio() {
 /**
  * Mount an interactive vector view on a canvas. Orbit drags around the origin
  * and the wheel zooms while the camera keeps looking at the origin.
- * setVectors({ a, b, result }) redraws. result is omitted for scalar results.
+ * setVectors({ a, b, result, wires, wireBounds, fading, planes, wireHead,
+ * wireAlpha, resultAlpha, extentFollow }) redraws. result is omitted for
+ * scalar results. wires are the retained sweep; wireBounds frames them.
+ * fading and planes dissolve older traces. extentFollow eases that frame.
  */
 export function createScene(canvas) {
   if (!canvas || typeof canvas.getContext !== "function" || typeof canvas.addEventListener !== "function") {
@@ -526,6 +856,15 @@ export function createScene(canvas) {
     a: null,
     b: null,
     result: null,
+    wires: null,
+    wireBounds: null,
+    fading: [],
+    planes: [],
+    wireHead: null,
+    wireAlpha: 1,
+    resultAlpha: 1,
+    extentFollow: null,
+    shownExtent: null,
     yaw: DEFAULT_YAW,
     pitch: DEFAULT_PITCH,
     zoom: 1,
@@ -538,8 +877,22 @@ export function createScene(canvas) {
 
   let observer = null;
 
+  function updateExtent() {
+    const target = framedExtent([state.a, state.b, state.result], state.wireBounds || state.wires);
+    const follow = state.extentFollow;
+    if (typeof follow !== "number" || !Number.isFinite(follow)) {
+      state.shownExtent = target;
+      return;
+    }
+    const step = follow <= 0 ? 0 : (follow >= 1 ? 1 : follow);
+    if (typeof state.shownExtent !== "number") state.shownExtent = target;
+    else state.shownExtent += (target - state.shownExtent) * step;
+  }
+
   function buildCamera() {
-    const extent = framedExtent([state.a, state.b, state.result]);
+    const extent = typeof state.shownExtent === "number"
+      ? state.shownExtent
+      : framedExtent([state.a, state.b, state.result], state.wireBounds || state.wires);
     const width = canvas.width > 0 ? canvas.width : 1;
     const height = canvas.height > 0 ? canvas.height : 1;
     const distance = Math.max(0.4, frameDistance(extent, FOV, width / height) * state.zoom);
@@ -581,12 +934,28 @@ export function createScene(canvas) {
     const dpr = state.dpr > 0 ? state.dpr : 1;
     context.fillStyle = COLOR.background;
     context.fillRect(0, 0, camera.width, camera.height);
+    drawStars(context, camera, dpr, state.yaw, state.pitch);
     const grid = drawGrid(context, camera, basis, dpr);
     drawAxes(context, camera, basis, dpr, grid.step);
-    drawVectors(context, camera, basis, dpr, state);
+    drawPlanes(context, camera, basis, dpr, state.planes);
+    for (const layer of state.fading) {
+      drawWires(context, camera, basis, dpr, layer.wires, layer.alpha, layer.head);
+    }
+    drawWires(context, camera, basis, dpr, state.wires, state.wireAlpha, state.wireHead);
+    drawVectors(context, camera, basis, dpr, state, state.resultAlpha);
     drawOrigin(context, camera, dpr);
-    const resultLength = state.result ? lengthOf(state.result) : 0;
-    drawLegend(context, dpr, resultLength >= 1e-8);
+    context.globalAlpha = 1;
+    const resultLength = state.result && state.resultAlpha > 0.04 ? lengthOf(state.result) : 0;
+    const showTrace = !!(
+      (state.wires && (
+        state.wires.a.length > 1
+        || state.wires.spans.length > 0
+        || state.wires.cross.length > 1
+      ))
+      || state.fading.length > 0
+    );
+    const showPlane = state.planes.some((plane) => plane && plane.alpha > 0.04);
+    drawLegend(context, dpr, resultLength >= 1e-8, showTrace, showPlane);
   }
 
   function setCursor(value) {
@@ -653,7 +1022,51 @@ export function createScene(canvas) {
     state.a = asVector(next.a);
     state.b = asVector(next.b);
     state.result = asVector(next.result);
+    if (next && Object.prototype.hasOwnProperty.call(next, "wires")) {
+      state.wires = normalizeWires(next.wires);
+    }
+    if (next && Object.prototype.hasOwnProperty.call(next, "wireBounds")) {
+      state.wireBounds = normalizeWires(next.wireBounds);
+    }
+    if (next && Object.prototype.hasOwnProperty.call(next, "fading")) {
+      state.fading = normalizeFading(next.fading);
+    }
+    if (next && Object.prototype.hasOwnProperty.call(next, "planes")) {
+      state.planes = normalizePlanes(next.planes);
+    }
+    if (next && Object.prototype.hasOwnProperty.call(next, "wireHead")) {
+      const head = Number(next.wireHead);
+      state.wireHead = Number.isFinite(head) ? head : null;
+    }
+    if (next && typeof next.wireAlpha === "number" && Number.isFinite(next.wireAlpha)) {
+      state.wireAlpha = Math.min(1, Math.max(0, next.wireAlpha));
+    } else {
+      state.wireAlpha = 1;
+    }
+    if (next && typeof next.resultAlpha === "number" && Number.isFinite(next.resultAlpha)) {
+      state.resultAlpha = Math.min(1, Math.max(0, next.resultAlpha));
+    } else {
+      state.resultAlpha = 1;
+    }
+    if (
+      next
+      && typeof next.extentFollow === "number"
+      && Number.isFinite(next.extentFollow)
+    ) {
+      state.extentFollow = next.extentFollow;
+    } else {
+      state.extentFollow = null;
+    }
+    updateExtent();
     draw();
+  }
+
+  function orbitBy(deltaYaw) {
+    if (state.dragging) return false;
+    if (typeof deltaYaw !== "number" || !Number.isFinite(deltaYaw) || deltaYaw === 0) return false;
+    state.yaw += deltaYaw;
+    draw();
+    return true;
   }
 
   function resize() {
@@ -685,6 +1098,7 @@ export function createScene(canvas) {
 
   const api = {
     setVectors,
+    orbitBy,
     resize,
     destroy,
     getCamera: buildCamera,

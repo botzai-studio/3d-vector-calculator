@@ -111,6 +111,56 @@ body {
   line-height: 1.4;
 }
 
+.motion-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.motion {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+
+.motion input {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.motion span {
+  pointer-events: none;
+}
+
+.motion:hover {
+  border-color: var(--accent);
+}
+
+.motion:has(input:checked),
+.motion:has(input:checked):hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
 .panel.is-demo .vector-card,
 .panel.is-demo .component input {
   border-color: var(--accent);
@@ -216,9 +266,61 @@ body {
 #vector-name:focus-visible,
 .button:focus-visible,
 .history-button:focus-visible,
-.segment:focus-within {
+.segment:focus-within,
+.motion:focus-within,
+.switch:focus-within {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+.demo-switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+
+.switch input {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.switch span {
+  pointer-events: none;
+}
+
+.switch:hover {
+  border-color: var(--accent);
+}
+
+.switch:has(input:checked),
+.switch:has(input:checked):hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--ink);
 }
 
 .block {
@@ -281,6 +383,7 @@ body {
   text-align: center;
   cursor: pointer;
   user-select: none;
+  transition: background-color 180ms ease, color 180ms ease;
 }
 
 .segment input {
@@ -498,8 +601,18 @@ body {
   overflow-wrap: anywhere;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .motion,
+  .switch,
+  .segment {
+    transition: none;
+  }
+}
+
 @media (forced-colors: active) {
   .segment:has(input:checked),
+  .motion:has(input:checked),
+  .switch:has(input:checked),
   .button-primary,
   .button-demo {
     outline: 2px solid CanvasText;

@@ -6,6 +6,7 @@ import {
   cameraBasis,
   createDefaultCamera,
   createScene,
+  createStarfield,
   project,
 } from "../public/scene.js";
 
@@ -245,6 +246,134 @@ test("pointer orbit and wheel zoom keep the origin at the view center", () => {
   assert.ok(Number.isFinite(clamped.position.z));
   assertCentered(project(ORIGIN, clamped), clamped);
   assert.equal(canvas.style.cursor, "grab");
+});
+
+test("retained wires keep the origin centered and stretch the frame", () => {
+  const canvas = fakeCanvas(800, 600);
+  const scene = createScene(canvas);
+  scene.setVectors({
+    a: { x: 1, y: 0, z: 0 },
+    b: { x: 0, y: 1, z: 0 },
+    wires: {
+      a: [{ x: 1, y: 0, z: 0 }, { x: 0, y: 0, z: 3 }],
+      b: [],
+      cross: [],
+      spans: [],
+    },
+    wireBounds: {
+      a: [{ x: 0, y: 0, z: 3 }],
+    },
+  });
+  const camera = scene.getCamera();
+  assertCentered(project(ORIGIN, camera), camera);
+  const distance = expectedDistance(3, camera.fov, camera.width / camera.height);
+  assert.ok(Math.abs(cameraDistance(camera) - distance) < 1e-6);
+  assert.ok(canvas.calls.includes("stroke"));
+  scene.destroy();
+});
+
+test("extentFollow eases the frame instead of jumping to a new reach", () => {
+  const canvas = fakeCanvas(800, 600);
+  const scene = createScene(canvas);
+  scene.setVectors({
+    a: { x: 1, y: 0, z: 0 },
+    b: { x: 0, y: 1, z: 0 },
+  });
+  const near = cameraDistance(scene.getCamera());
+  scene.setVectors({
+    a: { x: 1, y: 0, z: 0 },
+    b: { x: 0, y: 1, z: 0 },
+    wireBounds: { a: [{ x: 0, y: 0, z: 4 }] },
+    extentFollow: 0,
+  });
+  assert.ok(Math.abs(cameraDistance(scene.getCamera()) - near) < 1e-6);
+  scene.setVectors({
+    a: { x: 1, y: 0, z: 0 },
+    b: { x: 0, y: 1, z: 0 },
+    wireBounds: { a: [{ x: 0, y: 0, z: 4 }] },
+    extentFollow: 1,
+  });
+  const camera = scene.getCamera();
+  const far = expectedDistance(4, camera.fov, camera.width / camera.height);
+  assert.ok(Math.abs(cameraDistance(camera) - far) < 1e-6);
+  assertCentered(project(ORIGIN, camera), camera);
+  scene.destroy();
+});
+
+test("a starfield fills the background and orbitBy turns around the mesh", () => {
+  const stars = createStarfield(48, 3);
+  assert.equal(stars.length, 48);
+  for (const star of stars) {
+    assert.ok(star.u >= 0 && star.u < 1);
+    assert.ok(star.v >= 0 && star.v < 1);
+    assert.ok(star.mag >= 0 && star.mag < 1);
+    assert.ok(star.depth > 0 && star.depth <= 1);
+    assert.match(star.color, /^#[0-9a-f]{6}$/);
+  }
+  assert.deepEqual(createStarfield(48, 3), stars);
+
+  const canvas = fakeCanvas(800, 600);
+  const scene = createScene(canvas);
+  scene.setVectors({
+    a: { x: 1, y: 0, z: 0 },
+    b: { x: 0, y: 1, z: 0 },
+    wires: {
+      a: [
+        { x: 1, y: 0, z: 0 },
+        { x: 0.2, y: 0.8, z: 0.2 },
+        { x: 0, y: 1, z: 0 },
+      ],
+    },
+    wireHead: 0.4,
+    fading: [{
+      wires: {
+        a: [{ x: 1, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }],
+      },
+      alpha: 0.45,
+    }],
+    planes: [{
+      points: [
+        { x: 0, y: 0, z: 0 },
+        { x: 1, y: 0, z: 0 },
+        { x: 1, y: 0.2, z: 1 },
+        { x: 0, y: 0.2, z: 1 },
+      ],
+      alpha: 0.22,
+      color: "#22d3ee",
+    }, {
+      points: [{ x: 0, y: 0, z: 0 }],
+      alpha: 0,
+    }],
+  });
+  assert.ok(canvas.calls.includes("arc"));
+  assertCentered(project(ORIGIN, scene.getCamera()), scene.getCamera());
+
+  const before = scene.getCamera();
+  assert.equal(scene.orbitBy(0), false);
+  assert.equal(scene.orbitBy(0.35), true);
+  const turned = scene.getCamera();
+  const moved = Math.hypot(
+    turned.position.x - before.position.x,
+    turned.position.y - before.position.y,
+    turned.position.z - before.position.z,
+  );
+  assert.ok(moved > 0.05);
+  assert.deepEqual(turned.target, ORIGIN);
+  assertCentered(project(ORIGIN, turned), turned);
+
+  canvas.dispatch("pointerdown", {
+    button: 0,
+    pointerId: 4,
+    clientX: 12,
+    clientY: 12,
+    preventDefault() {},
+  });
+  const held = scene.getCamera().position;
+  assert.equal(scene.orbitBy(0.5), false);
+  assert.equal(scene.getCamera().position.x, held.x);
+  assert.equal(scene.getCamera().position.y, held.y);
+  assert.equal(scene.getCamera().position.z, held.z);
+  scene.destroy();
 });
 
 test("createScene is idempotent and resize keeps the origin centered", () => {

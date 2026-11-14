@@ -13,8 +13,44 @@
         <h1>3D Vector Calculator</h1>
         <p class="lede">Dot, cross, magnitude, normalize, and angle update as you type.</p>
         <div class="demo-bar">
-          <button type="button" class="button button-demo" id="demo-toggle" aria-pressed="false" aria-describedby="demo-note">Play demo</button>
-          <p id="demo-note" class="demo-note" role="status">Sweeps A and B with easing so the arrows follow.</p>
+          <button type="button" class="button button-demo" id="demo-toggle" aria-pressed="false" aria-describedby="demo-note">Animate</button>
+          <div class="motion-picker" role="radiogroup" aria-label="Animation type">
+            <label class="motion">
+              <input type="radio" name="motion" value="ease">
+              <span>Ease</span>
+            </label>
+            <label class="motion">
+              <input type="radio" name="motion" value="glide">
+              <span>Glide</span>
+            </label>
+            <label class="motion">
+              <input type="radio" name="motion" value="arc">
+              <span>Arc</span>
+            </label>
+            <label class="motion">
+              <input type="radio" name="motion" value="orbit" checked>
+              <span>Orbit</span>
+            </label>
+            <label class="motion">
+              <input type="radio" name="motion" value="bloom">
+              <span>Bloom</span>
+            </label>
+            <label class="motion">
+              <input type="radio" name="motion" value="lattice">
+              <span>Lattice</span>
+            </label>
+          </div>
+          <div class="demo-switches">
+            <label class="switch">
+              <input type="checkbox" id="rotate-toggle" name="rotate" checked aria-label="Rotate the view">
+              <span>Rotate</span>
+            </label>
+            <label class="switch">
+              <input type="checkbox" id="auto-toggle" name="auto" checked aria-label="Change animation and operation automatically">
+              <span>Auto</span>
+            </label>
+          </div>
+          <p id="demo-note" class="demo-note" role="status">Press Animate to orbit A and B. Rotation and auto changes start on, and old traces fade.</p>
         </div>
       </header>
       <div id="panel-body" class="panel-body">
@@ -58,7 +94,7 @@
           <legend>Operation</legend>
           <div class="segments" role="radiogroup" aria-label="Operation">
             <label class="segment">
-              <input type="radio" name="operation" value="dot" checked>
+              <input type="radio" name="operation" value="dot">
               <span>Dot</span>
             </label>
             <label class="segment">
@@ -70,7 +106,7 @@
               <span>Magnitude</span>
             </label>
             <label class="segment">
-              <input type="radio" name="operation" value="normalize">
+              <input type="radio" name="operation" value="normalize" checked>
               <span>Normalize</span>
             </label>
             <label class="segment">
@@ -80,7 +116,7 @@
           </div>
         </fieldset>
 
-        <fieldset class="block" id="target-field" data-active="false">
+        <fieldset class="block" id="target-field" data-active="true">
           <legend>Unary target</legend>
           <div class="segments segments-two" role="radiogroup" aria-label="Unary target">
             <label class="segment">

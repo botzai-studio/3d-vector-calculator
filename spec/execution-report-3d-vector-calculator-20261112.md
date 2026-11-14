@@ -2,14 +2,14 @@
 
 **Spec**: `specs/20261112-3d-vector-calculator/`
 **Output**: `demos/3d-vector-calculator/`
-**Finished**: 2026-11-13T09:48:02.933Z
+**Finished**: 2026-11-14T03:33:21.817Z
 **Inference**: —
 
 ## Work Items
 
 | Item | Title | State | Snapshot / commit | Duration |
 |------|-------|-------|-------------------|----------|
-| #35 | add demo button | done | `3b0a23070114` | 973.5s |
+| #38 | fixes | done | `f371b78d8ce7` | 1115.9s |
 
 ## Verification
 

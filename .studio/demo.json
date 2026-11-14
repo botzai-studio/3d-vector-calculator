@@ -14,6 +14,8 @@
     "bot/instructions.md",
     "bot/skills/support.md",
     "bot/tools/describe_demo.ts",
+    "certs/localhost.crt",
+    "certs/localhost.key",
     "evals/evals.config.ts",
     "evals/readiness.eval.ts",
     "package.json",
@@ -113,6 +115,39 @@
         {
           "key": "#35",
           "title": "add demo button",
+          "state": "done"
+        }
+      ],
+      "ok": false
+    },
+    {
+      "at": "2026-11-14T02:27:45.298Z",
+      "items": [
+        {
+          "key": "#36",
+          "title": "animations",
+          "state": "done"
+        }
+      ],
+      "ok": false
+    },
+    {
+      "at": "2026-11-14T03:12:08.614Z",
+      "items": [
+        {
+          "key": "#37",
+          "title": "animation enhancements",
+          "state": "done"
+        }
+      ],
+      "ok": false
+    },
+    {
+      "at": "2026-11-14T03:33:21.817Z",
+      "items": [
+        {
+          "key": "#38",
+          "title": "fixes",
           "state": "done"
         }
       ],

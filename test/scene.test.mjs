@@ -390,3 +390,48 @@ test("createScene is idempotent and resize keeps the origin centered", () => {
   assertCentered(project(ORIGIN, rebuilt.getCamera()), rebuilt.getCamera());
   rebuilt.destroy();
 });
+
+test("guideView eases pitch, roll, and look-at, and dragging holds the camera", () => {
+  const canvas = fakeCanvas(800, 600);
+  const scene = createScene(canvas);
+  const before = scene.getCamera();
+  assert.equal(scene.cameraResting(), true);
+  assert.deepEqual(before.up, { x: 0, y: 1, z: 0 });
+  assert.deepEqual(before.target, ORIGIN);
+  assertCentered(project(ORIGIN, before), before);
+  assert.equal(scene.guideView({ pitch: 1, roll: 0.4, lookAt: { x: 0.5, y: 0.2, z: 0 }, deltaMs: 0 }), false);
+  assert.equal(scene.getCamera().position.y, before.position.y);
+
+  assert.equal(scene.guideView({
+    pitch: 1,
+    roll: 0.4,
+    lookAt: { x: 0.5, y: 0.2, z: 0 },
+    deltaMs: 8000,
+  }), true);
+  const aimed = scene.getCamera();
+  assert.ok(aimed.position.y > before.position.y);
+  assert.ok(aimed.target.x > 0.4);
+  assert.ok(aimed.target.y > 0.15);
+  assert.ok(Math.abs(aimed.up.x) > 0.02 || Math.abs(aimed.up.z) > 0.02 || Math.abs(aimed.up.y - 1) > 0.02);
+  assert.equal(scene.cameraResting(), false);
+
+  canvas.dispatch("pointerdown", {
+    button: 0,
+    pointerId: 7,
+    clientX: 20,
+    clientY: 20,
+    preventDefault() {},
+  });
+  assert.equal(scene.guideView({
+    pitch: 0,
+    roll: 0,
+    lookAt: { x: 0, y: 0, z: 0 },
+    deltaMs: 8000,
+  }), false);
+  const held = scene.getCamera();
+  assert.equal(held.position.x, aimed.position.x);
+  assert.equal(held.position.y, aimed.position.y);
+  assert.equal(held.position.z, aimed.position.z);
+  assert.equal(held.target.x, aimed.target.x);
+  scene.destroy();
+});

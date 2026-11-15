@@ -16,9 +16,12 @@
  * wireAlpha and resultAlpha fade the live trace and the result arrow.
  * extentFollow, when set, eases the camera distance toward the new frame.
  * A starfield is drawn behind the grid. orbitBy yaws the camera around the
- * origin unless the user is dragging.
- * It returns { setVectors, orbitBy, resize, destroy, getCamera }. Calling
- * createScene again with the same canvas returns the existing scene.
+ * origin unless the user is dragging. guideView eases pitch, roll, and the
+ * look-at point for the animation camera paths, and it also waits while the
+ * user is dragging. With no roll and a look-at on the origin, the camera
+ * matches the original orbit.
+ * It returns { setVectors, orbitBy, guideView, cameraResting, resize, destroy, getCamera }.
+ * Calling createScene again with the same canvas returns the existing scene.
  */
 
 const COLOR = {
@@ -867,6 +870,8 @@ export function createScene(canvas) {
     shownExtent: null,
     yaw: DEFAULT_YAW,
     pitch: DEFAULT_PITCH,
+    roll: 0,
+    lookAt: { x: 0, y: 0, z: 0 },
     zoom: 1,
     dpr: 1,
     dragging: false,
@@ -896,14 +901,57 @@ export function createScene(canvas) {
     const width = canvas.width > 0 ? canvas.width : 1;
     const height = canvas.height > 0 ? canvas.height : 1;
     const distance = Math.max(0.4, frameDistance(extent, FOV, width / height) * state.zoom);
+    const offset = orbitPosition(state.yaw, state.pitch, distance);
+    const look = state.lookAt;
+    const shifted = !!(look && (look.x !== 0 || look.y !== 0 || look.z !== 0));
+    const position = shifted
+      ? { x: look.x + offset.x, y: look.y + offset.y, z: look.z + offset.z }
+      : offset;
+    const target = shifted
+      ? { x: look.x, y: look.y, z: look.z }
+      : { x: 0, y: 0, z: 0 };
+    const up = state.roll ? rolledUp(position, target, state.roll) : { x: 0, y: 1, z: 0 };
     return {
-      position: orbitPosition(state.yaw, state.pitch, distance),
-      target: { x: 0, y: 0, z: 0 },
-      up: { x: 0, y: 1, z: 0 },
+      position,
+      target,
+      up,
       fov: FOV,
       width,
       height,
     };
+  }
+
+  function rolledUp(eye, target, roll) {
+    const forward = normalize(sub(target, eye));
+    if (!forward) return { x: 0, y: 1, z: 0 };
+    const worldUp = { x: 0, y: 1, z: 0 };
+    let right = normalize(cross(forward, worldUp));
+    if (!right) {
+      const helper = Math.abs(forward.y) > 0.9 ? { x: 0, y: 0, z: 1 } : { x: 0, y: 1, z: 0 };
+      right = normalize(cross(forward, helper));
+    }
+    if (!right) right = { x: 1, y: 0, z: 0 };
+    let up = normalize(cross(right, forward));
+    if (!up) up = { x: 0, y: 1, z: 0 };
+    const c = Math.cos(roll);
+    const s = Math.sin(roll);
+    return {
+      x: up.x * c + right.x * s,
+      y: up.y * c + right.y * s,
+      z: up.z * c + right.z * s,
+    };
+  }
+
+  function dampToward(current, target, deltaMs, tauMs) {
+    const delta = typeof deltaMs === "number" && Number.isFinite(deltaMs) && deltaMs > 0 ? deltaMs : 0;
+    if (delta === 0) return current;
+    const tau = typeof tauMs === "number" && Number.isFinite(tauMs) && tauMs > 0 ? tauMs : 1;
+    const step = 1 - Math.exp(-delta / tau);
+    return current + (target - current) * step;
+  }
+
+  function nearly(a, b) {
+    return Math.abs(a - b) < 1e-4;
   }
 
   function layout() {
@@ -1069,6 +1117,61 @@ export function createScene(canvas) {
     return true;
   }
 
+  /**
+   * Ease pitch, roll, and the look-at point. A null pitch leaves pitch alone.
+   * Zero or negative deltaMs holds the current view. Dragging wins over the guide.
+   */
+  function guideView(patch) {
+    if (state.dragging) return false;
+    if (!patch || typeof patch !== "object") return false;
+    const delta = patch.deltaMs;
+    let changed = false;
+    if (typeof patch.pitch === "number" && Number.isFinite(patch.pitch)) {
+      const target = clamp(patch.pitch, PITCH_MIN, PITCH_MAX);
+      const next = dampToward(state.pitch, target, delta, 520);
+      if (!nearly(next, state.pitch)) {
+        state.pitch = next;
+        changed = true;
+      }
+    }
+    if (typeof patch.roll === "number" && Number.isFinite(patch.roll)) {
+      const next = dampToward(state.roll, patch.roll, delta, 520);
+      if (!nearly(next, state.roll)) {
+        state.roll = next;
+        changed = true;
+      }
+    }
+    if (patch.lookAt && isFinitePoint(patch.lookAt)) {
+      const next = {
+        x: dampToward(state.lookAt.x, patch.lookAt.x, delta, 420),
+        y: dampToward(state.lookAt.y, patch.lookAt.y, delta, 420),
+        z: dampToward(state.lookAt.z, patch.lookAt.z, delta, 420),
+      };
+      if (!nearly(next.x, state.lookAt.x) || !nearly(next.y, state.lookAt.y) || !nearly(next.z, state.lookAt.z)) {
+        state.lookAt = next;
+        changed = true;
+      }
+    }
+    if (Math.abs(state.roll) < 1e-3 && state.roll !== 0) {
+      state.roll = 0;
+      changed = true;
+    }
+    const look = state.lookAt;
+    if (Math.hypot(look.x, look.y, look.z) < 1e-3 && (look.x !== 0 || look.y !== 0 || look.z !== 0)) {
+      state.lookAt = { x: 0, y: 0, z: 0 };
+      changed = true;
+    }
+    if (!changed) return false;
+    draw();
+    return true;
+  }
+
+  function cameraResting() {
+    const look = state.lookAt;
+    return Math.abs(state.roll) < 1e-3
+      && Math.hypot(look.x, look.y, look.z) < 1e-3;
+  }
+
   function resize() {
     layout();
     draw();
@@ -1099,6 +1202,8 @@ export function createScene(canvas) {
   const api = {
     setVectors,
     orbitBy,
+    guideView,
+    cameraResting,
     resize,
     destroy,
     getCamera: buildCamera,

@@ -1,13 +1,10 @@
-import https from "node:https";
+import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(ROOT, "public");
-const CERT = path.resolve(ROOT, "certs/localhost.crt");
-const KEY = path.resolve(ROOT, "certs/localhost.key");
-
 const MIME_TYPES = new Map([
   [".html", "text/html; charset=utf-8"],
   [".css", "text/css; charset=utf-8"],
@@ -71,7 +68,7 @@ function requestTarget(rawUrl) {
 function publicName(rawUrl) {
   let pathname = "/";
   try {
-    pathname = decodeURIComponent(new URL(requestTarget(rawUrl), "https://127.0.0.1").pathname);
+    pathname = decodeURIComponent(new URL(requestTarget(rawUrl), "http://127.0.0.1").pathname);
   } catch {
     return null;
   }
@@ -120,7 +117,7 @@ function send(res, status, body, type = "text/plain; charset=utf-8") {
 
 export function createServer() {
   const files = loadPublic();
-  return https.createServer({ key: fs.readFileSync(KEY), cert: fs.readFileSync(CERT) }, (req, res) => {
+  return http.createServer((req, res) => {
     if (!allowRead(req.socket.remoteAddress)) {
       send(res, 429, req.method === "HEAD" ? "" : "Too many requests");
       return;
@@ -156,6 +153,6 @@ if (isDirectRun()) {
   const host = bindHost();
   const server = createServer();
   server.listen(port, host, () => {
-    console.log(`3D Vector Calculator serving public/ on https://${host}:${port}`);
+    console.log(`3D Vector Calculator serving public/ on http://${host}:${port}`);
   });
 }

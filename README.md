@@ -20,7 +20,7 @@ From the repository root:
 npm start
 ```
 
-That runs `node server.mjs` and serves `public/` at <https://localhost:4100>. On first start, `scripts/ensure-cert.mjs` creates a self-signed localhost certificate in `certs/` with `openssl`; that folder is not committed. Set `PORT` to choose another port. There are no npm dependencies.
+That runs `node server.mjs` and serves `public/` at <http://localhost:4100> over plain HTTP on loopback. Localhost is a secure context, so the static app does not need TLS. Set `PORT` to choose another port. There are no npm dependencies.
 
 ```bash
 npm test
@@ -28,14 +28,10 @@ npm test
 
 That runs `node --test` on the math, storage, projection, and server tests. No extra test runner is required.
 
-## Agent SDK companion
-
-This demo also includes a file-first Agent SDK project under `bot/` with smoke evals under `evals/`. See [agent run instructions](AGENT.md). SDK tooling is optional; the browser app still runs and tests without installing it.
 
 ## Repository layout
 
 - `public/`, `server.mjs`, `test/`: the app and its tests.
-- `bot/`, `evals/`: the Agent SDK companion.
 - `spec/`: the spec, subtasks, and status files the app was built from.
 - `.studio/`: Agent Studio state for this demo: the board record (`board.json`, issues labelled `demo:3d-vector-calculator` in this repo), demo metadata, and review evidence.
 

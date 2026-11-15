@@ -4,23 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prestart": "node scripts/ensure-cert.mjs",
     "start": "node server.mjs",
-    "pretest": "node scripts/ensure-cert.mjs",
-    "test": "node --test",
-    "agent:dev": "agent-sdk dev --dir .",
-    "agent:serve": "agent-sdk serve --dir .",
-    "agent:validate": "agent-sdk validate --dir .",
-    "agent:typecheck": "tsc -p tsconfig.agent.json",
-    "agent:eval": "agent-sdk eval --dir ."
+    "test": "node --test"
   },
   "engines": {
     "node": ">=22.13"
-  },
-  "optionalDependencies": {
-    "@grok/agent-sdk": "0.6.0",
-    "@cursor/sdk": "^1.3.1",
-    "typescript": "^5",
-    "@types/node": "^22"
   }
 }

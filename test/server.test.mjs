@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import https from "node:https";
+import http from "node:http";
 import test from "node:test";
-
-const ca = fs.readFileSync(new URL("../certs/localhost.crt", import.meta.url));
 
 import { bindHost, createServer } from "../server.mjs";
 
@@ -27,8 +24,8 @@ function close(server) {
 
 function request(port, path, method = "GET") {
   return new Promise((resolve, reject) => {
-    const req = https.request(
-      { hostname: "127.0.0.1", port, path, method, agent: false, ca, servername: "localhost" },
+    const req = http.request(
+      { hostname: "127.0.0.1", port, path, method, agent: false },
       (res) => {
         const chunks = [];
         res.on("data", (chunk) => chunks.push(chunk));

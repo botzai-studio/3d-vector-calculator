@@ -19,6 +19,10 @@ import {
   easeInOutCubic,
   easeInOutSine,
   formatSweepValue,
+  CAMERA_PATHS,
+  animationSeed,
+  cameraAim,
+  modeDurationMs,
   nextAnimationStep,
   planeOpacity,
   revealWires,
@@ -212,7 +216,7 @@ test("orbit, bloom, glide, and lattice stay long enough to draw", () => {
 });
 
 test("a sweep keeps vector attributes as a closed wireframe", () => {
-  assert.deepEqual(ANIMATION_TYPES, ["ease", "glide", "arc", "orbit", "bloom", "lattice"]);
+  assert.deepEqual(ANIMATION_TYPES, ["ease", "glide", "arc", "orbit", "bloom", "lattice", "helix", "weave", "pulse"]);
   const wires = sweepWires("orbit", 72);
   assert.equal(wires.a.length, 73);
   closeTo(wires.a[0], wires.a[wires.a.length - 1]);
@@ -278,6 +282,10 @@ test("auto settings leave orbit and normalize and then wrap", () => {
     operation: "cross",
   });
   assert.deepEqual(nextAnimationStep("lattice", "dot"), {
+    motion: "helix",
+    operation: "normalize",
+  });
+  assert.deepEqual(nextAnimationStep("pulse", "dot"), {
     motion: "ease",
     operation: "normalize",
   });
@@ -360,6 +368,131 @@ test("animation settings crossfade in the running sweep instead of restarting it
   assert.match(app, /blendPresentations/);
   assert.match(app, /extentFollow/);
   assert.match(app, /damp\(/);
+});
+
+test("helix, weave, and pulse stay closed, seeded, and long enough to draw", () => {
+  const cycle = DEMO_SEGMENT_MS * 6;
+  for (const motion of ["helix", "weave", "pulse"]) {
+    for (const seed of [1, 4, 19]) {
+      for (let step = 0; step <= 24; step += 1) {
+        const sample = sampleSweep((cycle * step) / 24, null, { motion, introMs: 0, seed });
+        assert.equal(sample.motion, motion);
+        for (const vector of [sample.a, sample.b]) {
+          assert.equal(Number.isFinite(vector.x + vector.y + vector.z), true);
+          const len = Math.hypot(vector.x, vector.y, vector.z);
+          assert.ok(len > 0.75, `${motion} seed ${seed} length ${len}`);
+        }
+      }
+    }
+    const wires = sweepWires(motion, 72, 5);
+    closeTo(wires.a[0], wires.a[wires.a.length - 1]);
+    closeTo(wires.b[0], wires.b[wires.b.length - 1]);
+    const started = sampleSweep(0, null, { motion, introMs: 0, seed: 11 });
+    const wrapped = sampleSweep(cycle, null, { motion, introMs: 0, seed: 11 });
+    closeTo(wrapped.a, started.a);
+    closeTo(wrapped.b, started.b);
+    const beforeSeam = sampleSweep(cycle - 16, null, { motion, introMs: 0, seed: 11 });
+    const seam = Math.hypot(
+      beforeSeam.a.x - started.a.x,
+      beforeSeam.a.y - started.a.y,
+      beforeSeam.a.z - started.a.z,
+    );
+    assert.ok(seam < 0.2, `${motion} seam ${seam}`);
+  }
+
+  const plain = sampleSweep(DEMO_SEGMENT_MS * 2, null, { motion: "orbit", introMs: 0 });
+  const canonical = sampleSweep(DEMO_SEGMENT_MS * 2, null, { motion: "orbit", introMs: 0, seed: 1 });
+  closeTo(plain.a, canonical.a);
+  closeTo(plain.b, canonical.b);
+  const shifted = sampleSweep(DEMO_SEGMENT_MS * 2, null, { motion: "orbit", introMs: 0, seed: 42 });
+  const again = sampleSweep(DEMO_SEGMENT_MS * 2, null, { motion: "orbit", introMs: 0, seed: 42 });
+  closeTo(shifted.a, again.a);
+  let seedGap = 0;
+  for (const seed of [3, 7, 42, 99, 256]) {
+    const sample = sampleSweep(DEMO_SEGMENT_MS * 2, null, { motion: "orbit", introMs: 0, seed });
+    seedGap = Math.max(seedGap, Math.hypot(sample.a.x - plain.a.x, sample.a.y - plain.a.y, sample.a.z - plain.a.z));
+  }
+  assert.ok(seedGap > 0.2, `seed gap ${seedGap}`);
+  const baseHelix = sampleSweep(0, null, { motion: "helix", introMs: 0, seed: 1 });
+  let helixGap = 0;
+  for (const seed of [7, 8, 11, 42]) {
+    const sample = sampleSweep(0, null, { motion: "helix", introMs: 0, seed });
+    helixGap = Math.max(
+      helixGap,
+      Math.hypot(sample.a.x - baseHelix.a.x, sample.a.y - baseHelix.a.y, sample.a.z - baseHelix.a.z),
+    );
+  }
+  assert.ok(helixGap > 0.2, `helix seed gap ${helixGap}`);
+});
+
+test("animation options cover seed, duration, and camera paths", () => {
+  assert.deepEqual(CAMERA_PATHS, ["none", "up", "down", "tilt", "follow", "trace"]);
+  assert.equal(animationSeed(1), 1);
+  assert.equal(animationSeed(0), 1);
+  assert.equal(animationSeed(-8), 8);
+  assert.equal(animationSeed("42"), 42);
+  assert.equal(animationSeed("nope"), 1);
+  assert.equal(modeDurationMs(9), 9000);
+  assert.equal(modeDurationMs("4.5"), 4500);
+  assert.equal(modeDurationMs(""), 9000);
+  assert.equal(modeDurationMs(0.2), 2000);
+  assert.equal(modeDurationMs(90), 60000);
+  assert.equal(modeDurationMs("nope"), 9000);
+
+  const up = cameraAim("up", Math.PI / 2, null, null);
+  const down = cameraAim("down", Math.PI / 2, null, null);
+  assert.ok(up.pitch > 0.9, `up ${up.pitch}`);
+  assert.ok(down.pitch < -0.1, `down ${down.pitch}`);
+  assert.ok(up.pitch > down.pitch);
+  const tilt = cameraAim("tilt", Math.PI / 2, null, null);
+  assert.ok(Math.abs(tilt.roll) > 0.4, `tilt ${tilt.roll}`);
+  assert.equal(tilt.pitch, null);
+  const follow = cameraAim("follow", 0, { a: { x: 2, y: 0, z: 0 }, b: { x: 0, y: 1, z: 0 } }, null);
+  assert.ok(follow.lookAt.x > 0.5, `follow ${follow.lookAt.x}`);
+  assert.equal(follow.lookAt.y, 0);
+  const parked = cameraAim("follow", 0, { a: { x: 0, y: 0, z: 0 } }, null);
+  assert.deepEqual(parked.lookAt, { x: 0, y: 0, z: 0 });
+  const trace = cameraAim("trace", 0, {
+    a: { x: 1, y: 0, z: 0 },
+    b: { x: 0, y: 1, z: 0 },
+    progress: 0,
+  }, null);
+  assert.ok(trace.lookAt.z > 0.2, `trace ${trace.lookAt.z}`);
+  const wires = {
+    cross: [
+      { x: 0, y: 0, z: 1 },
+      { x: 0, y: 2, z: 0 },
+    ],
+  };
+  const traced = cameraAim("trace", 0, {
+    a: { x: 1, y: 0, z: 0 },
+    b: { x: 0, y: 1, z: 0 },
+    progress: 1,
+  }, wires);
+  assert.ok(traced.lookAt.y > traced.lookAt.z);
+  assert.equal(cameraAim("nope", 0, null, null).pitch, null);
+
+  const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+  const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+  assert.match(html, /value="helix"/);
+  assert.match(html, /value="weave"/);
+  assert.match(html, /value="pulse"/);
+  assert.match(html, /id="anim-dialog"/);
+  assert.match(html, /id="anim-seed"/);
+  assert.match(html, /id="anim-seed-random"/);
+  assert.match(html, /id="mode-duration"/);
+  assert.match(html, /name="camera-path"/);
+  assert.match(html, /value="up"/);
+  assert.match(html, /value="down"/);
+  assert.match(html, /value="tilt"/);
+  assert.match(html, /value="follow"/);
+  assert.match(html, /value="trace"/);
+  assert.match(html, /value="none"[^>]*checked/);
+  assert.match(app, /guideView/);
+  assert.match(app, /modeDurationMs/);
+  assert.match(app, /cameraAim/);
+  assert.match(app, /anim-dialog/);
+  assert.match(app, /readModeDuration\(\)/);
 });
 
 test("lattice wires visit every corner of the octahedron", () => {

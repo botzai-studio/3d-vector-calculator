@@ -2,14 +2,17 @@
  * Timed sweeps for the Animate control. Pure: no DOM, no imports.
  *
  * Ease, the original motion, slows into each pose with easeInOutCubic.
- * Glide, arc, orbit, bloom, and lattice move differently. blendSweep and
- * blendPresentations ease from the pose already on screen when those settings
- * change, without restarting the clock. sweepWires samples
+ * Glide, arc, orbit, bloom, lattice, helix, weave, and pulse move differently.
+ * blendSweep and blendPresentations ease from the pose already on screen when
+ * those settings change, without restarting the clock. sweepWires samples
  * one closed loop and keeps the tip paths, the ground projection, the vertical
  * drops, the span from A to B, and the A × B trail. Those polylines are the
  * wireframe the view retains while the arrows keep moving.
  * tracePlane flattens one slice of that mesh onto a single plane. Older
  * copies fade through wireOpacity, and those planes fade through planeOpacity.
+ * A seed of 1 leaves the original six motions unchanged. Other seeds turn
+ * those paths and reshape helix, weave, and pulse. cameraAim is the smooth
+ * up, down, tilt, follow, and result-trace target for the view.
  */
 
 export const DEMO_INTRO_MS = 800;
@@ -21,7 +24,15 @@ export const DEMO_SEGMENT_MS = 1200;
  */
 export const MOTION_BLEND_MS = 900;
 
-export const ANIMATION_TYPES = ["ease", "glide", "arc", "orbit", "bloom", "lattice"];
+export const ANIMATION_TYPES = ["ease", "glide", "arc", "orbit", "bloom", "lattice", "helix", "weave", "pulse"];
+
+/** Omitted seeds and seed 1 keep Ease through Lattice on their original paths. */
+export const DEFAULT_ANIM_SEED = 1;
+
+/** How long Auto waits before the next motion when the duration field is empty. */
+export const DEFAULT_MODE_MS = 9000;
+
+export const CAMERA_PATHS = ["none", "up", "down", "tilt", "follow", "trace"];
 
 const LATTICE_SCALE = 1.5;
 
@@ -263,17 +274,132 @@ function latticePose(progress) {
   };
 }
 
-function poseFor(motion, progress) {
-  if (motion === "glide") return glidePose(progress);
-  if (motion === "orbit") return orbitPose(progress);
-  if (motion === "bloom") return bloomPose(progress);
-  if (motion === "lattice") return latticePose(progress);
+function mulberry32(seed) {
+  let state = seed >>> 0;
+  return function next() {
+    state = (state + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Finite seeds other than 0 and 1. Those two match the unseeded motions. */
+function canonicalSeed(seed) {
+  if (typeof seed !== "number" || !Number.isFinite(seed)) return null;
+  const value = Math.trunc(Math.abs(seed)) % 1000000;
+  if (value === 0 || value === 1) return null;
+  return value;
+}
+
+function motionParams(seed) {
+  const unit = canonicalSeed(seed);
+  const random = mulberry32(unit == null ? 1 : unit);
+  return {
+    phaseA: random() * Math.PI * 2,
+    phaseB: random() * Math.PI * 2,
+    radius: 1.15 + random() * 0.35,
+    lift: 0.28 + random() * 0.35,
+    lobes: 2 + Math.floor(random() * 3),
+  };
+}
+
+/** Closed spiral. A and B trade height once per lap and meet again at the seam. */
+function helixPose(progress, params) {
+  const angle = progress * Math.PI * 2;
+  const lift = params.lift * Math.sin(angle);
+  return {
+    a: {
+      x: params.radius * Math.cos(angle + params.phaseA),
+      y: lift,
+      z: params.radius * Math.sin(angle + params.phaseA),
+    },
+    b: {
+      x: params.radius * 0.82 * Math.cos(angle + params.phaseB + Math.PI),
+      y: 0.35 - lift,
+      z: params.radius * 0.82 * Math.sin(angle + params.phaseB + Math.PI),
+    },
+  };
+}
+
+/** Figure-eight pitch. B laps twice so the pair keeps crossing. */
+function weavePose(progress, params) {
+  const angle = progress * Math.PI * 2;
+  const eight = Math.sin(2 * angle);
+  const radius = params.radius * (0.92 + 0.08 * Math.cos(2 * angle));
+  return {
+    a: directed(angle + params.phaseA, params.lift * 0.55 * eight, radius),
+    b: directed(angle * 2 + params.phaseB, params.lift * 0.4 * Math.sin(angle), radius * 0.88),
+  };
+}
+
+/** Radius breathes for an integer number of lobes, then the loop closes. */
+function pulsePose(progress, params) {
+  const angle = progress * Math.PI * 2;
+  const breath = 0.78 + 0.22 * (0.5 - 0.5 * Math.cos(params.lobes * angle));
+  return {
+    a: directed(angle + params.phaseA, 0.22 * Math.sin(angle), params.radius * breath),
+    b: directed(-angle + params.phaseB, -0.18 * Math.sin(angle), params.radius * (1.12 - 0.34 * breath)),
+  };
+}
+
+function seededProgress(progress, seed) {
+  const unit = canonicalSeed(seed);
+  if (unit == null) return progress;
+  const random = mulberry32(unit ^ 0x51ed270b);
+  const shifted = progress + random();
+  return shifted - Math.floor(shifted);
+}
+
+function scaleVector(vector, scale) {
+  return { x: vector.x * scale, y: vector.y * scale, z: vector.z * scale };
+}
+
+function yawTurn(vector, angle) {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return {
+    x: vector.x * c - vector.z * s,
+    y: vector.y,
+    z: vector.x * s + vector.z * c,
+  };
+}
+
+/**
+ * Turn and scale the original motions when the seed is not the canonical one.
+ * Helix, weave, and pulse already carry the seed in their shape.
+ */
+function withSeed(sample, seed) {
+  if (!sample || sample.motion === "helix" || sample.motion === "weave" || sample.motion === "pulse") {
+    return sample;
+  }
+  const unit = canonicalSeed(seed);
+  if (unit == null) return sample;
+  const random = mulberry32(unit ^ 0x9e3779b9);
+  const yaw = random() * Math.PI * 2;
+  const scale = 0.94 + random() * 0.16;
+  return {
+    ...sample,
+    a: yawTurn(scaleVector(sample.a, scale), yaw),
+    b: yawTurn(scaleVector(sample.b, scale), yaw),
+  };
+}
+
+function poseFor(motion, progress, seed) {
+  if (motion === "helix") return helixPose(progress, motionParams(seed));
+  if (motion === "weave") return weavePose(progress, motionParams(seed));
+  if (motion === "pulse") return pulsePose(progress, motionParams(seed));
+  const local = seededProgress(progress, seed);
+  if (motion === "glide") return glidePose(local);
+  if (motion === "orbit") return orbitPose(local);
+  if (motion === "bloom") return bloomPose(local);
+  if (motion === "lattice") return latticePose(local);
   return DEMO_POSES[0];
 }
 
-function firstPose(motion) {
+function firstPose(motion, seed) {
   if (motion === "arc" || motion === "ease") return DEMO_POSES[0];
-  return poseFor(motion, 0);
+  return poseFor(motion, 0, seed);
 }
 
 function elapsedMsOf(elapsedMs) {
@@ -304,14 +430,14 @@ export function sampleSweep(elapsedMs, start, options = {}) {
 
   if (elapsed <= introMs) {
     const u = easeInOutCubic(introMs === 0 ? 1 : elapsed / introMs);
-    return {
+    return withSeed({
       a: blendVector(fromA, poses[0].a, u),
       b: blendVector(fromB, poses[0].b, u),
       phase: "intro",
       motion: "ease",
       progress: 0,
       laps: 0,
-    };
+    }, options.seed);
   }
 
   const segments = poses.length - 1;
@@ -322,14 +448,14 @@ export function sampleSweep(elapsedMs, start, options = {}) {
   if (index >= segments) index = segments - 1;
   const u = easeInOutCubic((local - index * segmentMs) / segmentMs);
   const traveled = elapsed - introMs;
-  return {
+  return withSeed({
     a: blendVector(poses[index].a, poses[index + 1].a, u),
     b: blendVector(poses[index].b, poses[index + 1].b, u),
     phase: "sweep",
     motion: "ease",
     progress: cycle > 0 ? local / cycle : 0,
     laps: cycle > 0 ? Math.floor(traveled / cycle) : 0,
-  };
+  }, options.seed);
 }
 
 function isVector(value) {
@@ -399,12 +525,13 @@ export function blendPresentations(from, to, amount) {
 }
 
 function sampleStyledMotion(motion, elapsedMs, start, options) {
+  const seed = options && options.seed;
   const segmentMs = Math.max(1, durationMs(options.segmentMs, DEMO_SEGMENT_MS));
   const introSetting = durationMs(options.introMs, DEMO_INTRO_MS);
   const elapsed = elapsedMsOf(elapsedMs);
   const segments = motion === "arc" ? DEMO_POSES.length - 1 : SWEEP_STEPS;
   const cycle = segmentMs * segments;
-  const first = firstPose(motion);
+  const first = firstPose(motion, seed);
   const fromA = asVector(start && start.a, first.a);
   const fromB = asVector(start && start.b, first.b);
   const introMs = nearVector(fromA, first.a) && nearVector(fromB, first.b) ? 0 : introSetting;
@@ -413,14 +540,14 @@ function sampleStyledMotion(motion, elapsedMs, start, options) {
 
   if (elapsed <= introMs) {
     const u = introMs === 0 ? 1 : introEase(elapsed / introMs);
-    return {
+    return withSeed({
       a: blend(fromA, first.a, u),
       b: blend(fromB, first.b, u),
       phase: "intro",
       motion,
       progress: 0,
       laps: 0,
-    };
+    }, seed);
   }
 
   let local = (elapsed - introMs) % cycle;
@@ -432,25 +559,25 @@ function sampleStyledMotion(motion, elapsedMs, start, options) {
     let index = Math.floor(local / segmentMs);
     if (index >= segments) index = segments - 1;
     const u = easeInOutSine((local - index * segmentMs) / segmentMs);
-    return {
+    return withSeed({
       a: slerpVector(DEMO_POSES[index].a, DEMO_POSES[index + 1].a, u),
       b: slerpVector(DEMO_POSES[index].b, DEMO_POSES[index + 1].b, u),
       phase: "sweep",
       motion,
       progress,
       laps,
-    };
+    }, seed);
   }
 
-  const pose = poseFor(motion, progress);
-  return {
+  const pose = poseFor(motion, progress, seed);
+  return withSeed({
     a: pose.a,
     b: pose.b,
     phase: "sweep",
     motion,
     progress,
     laps,
-  };
+  }, seed);
 }
 
 function pushCopy(list, vector) {
@@ -462,10 +589,10 @@ function pushCopy(list, vector) {
  * wireframe: tips of A and B, their ground projections, a vertical drop,
  * the span from A to B, and the cross product A × B.
  */
-export function sweepWires(motion = "ease", steps = 144) {
+export function sweepWires(motion = "ease", steps = 144, seed) {
   const motionName = motionId(motion);
   const count = Math.max(12, Math.round(steps) || 144);
-  const first = firstPose(motionName);
+  const first = firstPose(motionName, seed);
   const start = { a: copyVector(first.a), b: copyVector(first.b) };
   const segments = motionName === "arc" || motionName === "ease" ? DEMO_POSES.length - 1 : SWEEP_STEPS;
   const cycle = DEMO_SEGMENT_MS * segments;
@@ -480,7 +607,7 @@ export function sweepWires(motion = "ease", steps = 144) {
   };
 
   for (let i = 0; i <= count; i += 1) {
-    const sample = sampleSweep(cycle * (i / count), start, { motion: motionName, introMs: 0 });
+    const sample = sampleSweep(cycle * (i / count), start, { motion: motionName, introMs: 0, seed });
     pushCopy(wires.a, sample.a);
     pushCopy(wires.b, sample.b);
     wires.cross.push(crossOf(sample.a, sample.b));
@@ -723,6 +850,73 @@ export function planeOpacity(ageMs, lifeMs = PLANE_LIFE_MS) {
   if (ageMs >= life) return 0;
   const remain = 1 - ageMs / life;
   return PLANE_PEAK * remain * remain;
+}
+
+function aimPoint(vector) {
+  if (!isVector(vector)) return { x: 0, y: 0, z: 0 };
+  const len = Math.hypot(vector.x, vector.y, vector.z);
+  if (!(len > 1e-6)) return { x: 0, y: 0, z: 0 };
+  const gain = Math.min(0.62, 0.9 / len);
+  return { x: vector.x * gain, y: vector.y * gain, z: vector.z * gain };
+}
+
+function traceAim(sample, wires) {
+  const left = isVector(sample && sample.a) ? sample.a : null;
+  const right = isVector(sample && sample.b) ? sample.b : null;
+  let point = left && right ? crossOf(left, right) : { x: 0, y: 0, z: 0 };
+  if (wires && Array.isArray(wires.cross) && wires.cross.length > 0 && sample) {
+    const progress = typeof sample.progress === "number" ? clamp01(sample.progress) : 0;
+    const last = wires.cross.length - 1;
+    const index = Math.max(0, Math.min(last, Math.round(progress * last)));
+    const trail = wires.cross[index];
+    if (isVector(trail)) point = blendVector(point, trail, 0.65);
+  }
+  return aimPoint(point);
+}
+
+/** Known camera paths. Anything else holds the current angle. */
+export function cameraPathId(value) {
+  return CAMERA_PATHS.includes(value) ? value : "none";
+}
+
+/**
+ * Smooth camera target for one path.
+ * `pitch` and `roll` are radians. A null pitch leaves the current pitch alone.
+ * `lookAt` stays near the origin so the grid remains in frame.
+ */
+export function cameraAim(path, phase, sample, wires) {
+  const id = cameraPathId(path);
+  const t = typeof phase === "number" && Number.isFinite(phase) ? phase : 0;
+  const origin = { x: 0, y: 0, z: 0 };
+  if (id === "up") return { pitch: 0.78 + 0.28 * Math.sin(t), roll: 0, lookAt: origin };
+  if (id === "down") return { pitch: -0.42 + 0.28 * Math.sin(t), roll: 0, lookAt: origin };
+  if (id === "tilt") return { pitch: null, roll: 0.55 * Math.sin(t), lookAt: origin };
+  if (id === "follow") return { pitch: null, roll: 0, lookAt: aimPoint(sample && sample.a) };
+  if (id === "trace") return { pitch: null, roll: 0, lookAt: traceAim(sample, wires) };
+  return { pitch: null, roll: 0, lookAt: origin };
+}
+
+/** Whole-number seed in 1…999999. Empty, zero, and non-numeric values become 1. */
+export function animationSeed(value) {
+  const number = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(number)) return DEFAULT_ANIM_SEED;
+  let seed = Math.trunc(Math.abs(number)) % 1000000;
+  if (seed === 0) seed = DEFAULT_ANIM_SEED;
+  return seed;
+}
+
+/**
+ * Milliseconds to hold one motion before Auto eases into the next.
+ * Values are seconds. The range is 2–60 seconds.
+ */
+export function modeDurationMs(value) {
+  if (typeof value === "string" && value.trim() === "") return DEFAULT_MODE_MS;
+  const seconds = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(seconds)) return DEFAULT_MODE_MS;
+  const ms = seconds * 1000;
+  if (ms < 2000) return 2000;
+  if (ms > 60000) return 60000;
+  return ms;
 }
 
 /** Next motion and operation for the auto control. Unknown names start at orbit. */

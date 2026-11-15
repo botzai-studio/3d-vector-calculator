@@ -1,11 +1,15 @@
 import {
   ANIMATION_TYPES,
   MOTION_BLEND_MS,
+  animationSeed,
   blendPresentations,
   blendSweep,
+  cameraAim,
+  cameraPathId,
   damp,
   easeInOutCubic,
   formatSweepValue,
+  modeDurationMs,
   nextAnimationStep,
   planeOpacity,
   revealWires,
@@ -21,7 +25,7 @@ import { VECTOR_CAP, createStore } from "./storage.js";
 const COMPONENT = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i;
 const ZERO = 1e-12;
 const HISTORY_DELAY = 280;
-const DEMO_IDLE_NOTE = "Press Animate to orbit A and B. Rotation and auto changes start on, and old traces fade.";
+const DEMO_IDLE_NOTE = "Press Animate to orbit A and B. Rotation and auto changes start on, and old traces fade. Options sets the seed, how long each motion plays, and the camera path.";
 const MOTION_NOTES = {
   ease: "Ease slows into each pose.",
   glide: "Glide holds a steady speed along a squircle.",
@@ -29,8 +33,17 @@ const MOTION_NOTES = {
   orbit: "Orbit weaves a lissajous around the mesh.",
   bloom: "Bloom opens petal trails.",
   lattice: "Lattice walks the edges of an octahedron.",
+  helix: "Helix spirals both arrows around a shared axis.",
+  weave: "Weave crosses a figure-eight between the arrows.",
+  pulse: "Pulse breathes the arrows in and out as they turn.",
 };
-const AUTO_STEP_MS = 9000;
+const CAMERA_NOTES = {
+  up: " The camera eases upward.",
+  down: " The camera eases downward.",
+  tilt: " The camera tilts from side to side.",
+  follow: " The camera follows vector A.",
+  trace: " The camera follows the calculated result trace.",
+};
 const PLANE_STEP_MS = 2300;
 const CAMERA_SPIN = 0.00015;
 const SPIN_TAU_MS = 420;
@@ -396,6 +409,9 @@ export function mountWorkspace(root = globalThis.document) {
   let demoLastFrame = 0;
   let demoOrigin = null;
   let motion = "orbit";
+  let animSeed = 1;
+  let cameraPhase = 0;
+  let lastSample = null;
   let handoff = null;
   let opHandoff = null;
   let opShown = null;
@@ -759,13 +775,48 @@ export function mountWorkspace(root = globalThis.document) {
     return !!input.checked;
   }
 
+  function readAnimSeed() {
+    const input = root.querySelector("#anim-seed");
+    if (!input) return 1;
+    return animationSeed(input.value);
+  }
+
+  function readModeDuration() {
+    const input = root.querySelector("#mode-duration");
+    if (!input) return 9000;
+    return modeDurationMs(input.value);
+  }
+
+  function readCameraPath() {
+    const selected = root.querySelector('input[name="camera-path"]:checked');
+    return cameraPathId(selected && selected.value);
+  }
+
+  function formatSeconds(ms) {
+    const seconds = ms / 1000;
+    const rounded = Math.round(seconds * 10) / 10;
+    return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  }
+
   function motionNote(running) {
     if (!running) return DEMO_IDLE_NOTE;
     const detail = MOTION_NOTES[motion] || MOTION_NOTES.orbit;
     let note = `On. ${detail} Older wires and trace planes fade.`;
     if (readChecked("rotate-toggle", true)) note += " The view turns slowly.";
-    if (readChecked("auto-toggle", true)) note += " Auto changes the motion and operation.";
+    if (readChecked("auto-toggle", true)) {
+      note += ` Auto changes the motion and operation every ${formatSeconds(readModeDuration())} seconds.`;
+    }
+    note += CAMERA_NOTES[readCameraPath()] || "";
     return note;
+  }
+
+  function seedOf(seed) {
+    if (typeof seed === "number" && Number.isFinite(seed)) return animationSeed(seed);
+    return animSeed;
+  }
+
+  function sweepAt(elapsed, motionName, seed) {
+    return sampleSweep(elapsed, demoOrigin, { motion: motionName, seed: seedOf(seed) });
   }
 
   function clearVisuals() {
@@ -802,6 +853,20 @@ export function mountWorkspace(root = globalThis.document) {
     const rate = followSpin(delta);
     if (!(Math.abs(rate) > 1e-8) || !scene || typeof scene.orbitBy !== "function") return;
     scene.orbitBy(delta * rate);
+  }
+
+  function applyCameraGuide(delta, sample) {
+    if (!scene || typeof scene.guideView !== "function") return;
+    const path = demoRunning ? readCameraPath() : "none";
+    if (demoRunning && path !== "none" && delta > 0) cameraPhase += delta * 0.00055;
+    const wires = path === "trace" && sample ? wiresFor(motion, animSeed) : null;
+    const aim = cameraAim(path, cameraPhase, sample, wires);
+    scene.guideView({
+      pitch: aim.pitch,
+      roll: aim.roll,
+      lookAt: aim.lookAt,
+      deltaMs: delta,
+    });
   }
 
   function cloneWires(wires) {
@@ -853,11 +918,13 @@ export function mountWorkspace(root = globalThis.document) {
     return !!(visibleWires || wireBounds || fading.length || planes.length);
   }
 
-  function wiresFor(motionName) {
-    let cached = wireCaches.get(motionName);
+  function wiresFor(motionName, seed) {
+    const resolved = seedOf(seed);
+    const key = `${motionName}:${resolved}`;
+    let cached = wireCaches.get(key);
     if (!cached) {
-      cached = sweepWires(motionName);
-      wireCaches.set(motionName, cached);
+      cached = sweepWires(motionName, 144, resolved);
+      wireCaches.set(key, cached);
     }
     return cached;
   }
@@ -902,31 +969,32 @@ export function mountWorkspace(root = globalThis.document) {
     const rest = scale * (1 - eased);
     const next = scale * eased;
     if (node.from) flattenHandoff(node.from, now, rest, out);
-    else if (rest > 0.001) out.push({ motion: node.fromMotion, weight: rest });
-    if (next > 0.001) out.push({ motion: node.toMotion, weight: next });
+    else if (rest > 0.001) out.push({ motion: node.fromMotion, seed: seedOf(node.fromSeed), weight: rest });
+    if (next > 0.001) out.push({ motion: node.toMotion, seed: seedOf(node.toSeed), weight: next });
   }
 
   function mergeLayers(list) {
     const map = new Map();
     const order = [];
     for (const layer of list) {
-      const existing = map.get(layer.motion);
+      const key = `${layer.motion}:${layer.seed}`;
+      const existing = map.get(key);
       if (existing) {
         existing.weight += layer.weight;
         continue;
       }
-      const item = { motion: layer.motion, weight: layer.weight };
-      map.set(layer.motion, item);
+      const item = { motion: layer.motion, seed: layer.seed, weight: layer.weight };
+      map.set(key, item);
       order.push(item);
     }
     return order;
   }
 
   function evalHandoff(node, elapsed) {
-    const to = sampleSweep(elapsed, demoOrigin, { motion: node.toMotion });
+    const to = sweepAt(elapsed, node.toMotion, node.toSeed);
     const from = node.from
       ? evalHandoff(node.from, elapsed)
-      : sampleSweep(elapsed, demoOrigin, { motion: node.fromMotion });
+      : sweepAt(elapsed, node.fromMotion, node.fromSeed);
     const mixed = blendSweep(from, to, (playMs - node.startMs) / MOTION_BLEND_MS);
     return {
       a: mixed.a,
@@ -941,18 +1009,18 @@ export function mountWorkspace(root = globalThis.document) {
   function composeSweep(elapsed) {
     handoff = pruneHandoff(handoff, playMs);
     if (!handoff) {
-      const sample = sampleSweep(elapsed, demoOrigin, { motion });
-      return { sample, layers: [{ motion, weight: 1, sample }] };
+      const sample = sweepAt(elapsed, motion, animSeed);
+      return { sample, layers: [{ motion, seed: animSeed, weight: 1, sample }] };
     }
     const flat = [];
     flattenHandoff(handoff, playMs, 1, flat);
     const layers = mergeLayers(flat);
     for (const layer of layers) {
-      layer.sample = sampleSweep(elapsed, demoOrigin, { motion: layer.motion });
+      layer.sample = sweepAt(elapsed, layer.motion, layer.seed);
     }
     if (layers.length === 0) {
-      const sample = sampleSweep(elapsed, demoOrigin, { motion });
-      return { sample, layers: [{ motion, weight: 1, sample }] };
+      const sample = sweepAt(elapsed, motion, animSeed);
+      return { sample, layers: [{ motion, seed: animSeed, weight: 1, sample }] };
     }
     return { sample: evalHandoff(handoff, elapsed), layers };
   }
@@ -960,6 +1028,7 @@ export function mountWorkspace(root = globalThis.document) {
   function applySweep(elapsed) {
     const view = composeSweep(elapsed);
     const sample = view.sample;
+    lastSample = sample;
     writeSweep("a", sample.a);
     writeSweep("b", sample.b);
     let primary = view.layers[0];
@@ -969,7 +1038,7 @@ export function mountWorkspace(root = globalThis.document) {
     const caches = [];
     const extras = [];
     for (const layer of view.layers) {
-      const wires = wiresFor(layer.sample ? layer.motion : motion);
+      const wires = wiresFor(layer.sample ? layer.motion : motion, layer.seed);
       caches.push(wires);
       const revealed = revealWires(wires, layer.sample.progress, layer.sample.laps);
       const head = layer.sample.laps >= 1 ? layer.sample.progress : 1;
@@ -1043,9 +1112,9 @@ export function mountWorkspace(root = globalThis.document) {
 
   function stampPlane() {
     if (handoff) return;
-    const sample = sampleSweep(demoElapsed, demoOrigin, { motion });
+    const sample = sweepAt(demoElapsed, motion, animSeed);
     if (sample.phase === "intro" || sample.phase === "blend") return;
-    const plane = tracePlane(wiresFor(motion), sample.progress);
+    const plane = tracePlane(wiresFor(motion, animSeed), sample.progress);
     if (!plane) return;
     planes.push({
       points: plane.points,
@@ -1067,6 +1136,8 @@ export function mountWorkspace(root = globalThis.document) {
       from: active,
       fromMotion: motion,
       toMotion: next,
+      fromSeed: active && typeof active.toSeed === "number" ? active.toSeed : animSeed,
+      toSeed: animSeed,
       startMs: playMs,
     };
     motion = next;
@@ -1091,7 +1162,7 @@ export function mountWorkspace(root = globalThis.document) {
     demoElapsed += delta;
     for (const layer of fading) layer.age += delta;
     applySpin(delta);
-    if (readChecked("auto-toggle", true) && playMs - lastAutoMs >= AUTO_STEP_MS) {
+    if (readChecked("auto-toggle", true) && playMs - lastAutoMs >= readModeDuration()) {
       lastAutoMs = playMs;
       advanceSettings();
     } else {
@@ -1101,6 +1172,7 @@ export function mountWorkspace(root = globalThis.document) {
       }
       applySweep(demoElapsed);
     }
+    applyCameraGuide(delta, lastSample);
     demoFrame = frame(demoTick);
   }
 
@@ -1115,9 +1187,12 @@ export function mountWorkspace(root = globalThis.document) {
     playMs += delta;
     for (const layer of fading) layer.age += delta;
     applySpin(delta);
+    applyCameraGuide(delta, null);
+    const cameraMoving = scene && typeof scene.cameraResting === "function" && !scene.cameraResting();
     const alive = fading.some((layer) => wireOpacity(layer.age) > 0.02)
       || planes.some((plane) => planeOpacity(playMs - plane.born) > 0.02)
-      || Math.abs(spin) > 1e-7;
+      || Math.abs(spin) > 1e-7
+      || cameraMoving;
     renderCalculation();
     if (!alive) {
       settling = false;
@@ -1129,7 +1204,8 @@ export function mountWorkspace(root = globalThis.document) {
 
   function startSettle() {
     if (demoRunning) return;
-    if (fading.length === 0 && planes.length === 0 && !(Math.abs(spin) > 1e-7)) return;
+    const cameraMoving = scene && typeof scene.cameraResting === "function" && !scene.cameraResting();
+    if (fading.length === 0 && planes.length === 0 && !(Math.abs(spin) > 1e-7) && !cameraMoving) return;
     if (settling && demoFrame) return;
     settling = true;
     demoLastFrame = 0;
@@ -1174,6 +1250,8 @@ export function mountWorkspace(root = globalThis.document) {
     names.A = "";
     names.B = "";
     motion = readMotion();
+    animSeed = readAnimSeed();
+    cameraPhase = 0;
     demoOrigin = {
       a: {
         x: componentOr("a-x", 1),
@@ -1440,14 +1518,72 @@ export function mountWorkspace(root = globalThis.document) {
     motionPicker.addEventListener("change", onMotionChange);
   }
 
+  function commitSeed() {
+    const next = readAnimSeed();
+    if (next === animSeed) return;
+    const previous = animSeed;
+    animSeed = next;
+    if (!demoRunning) return;
+    const active = handoff && playMs - handoff.startMs < MOTION_BLEND_MS ? handoff : null;
+    handoff = {
+      from: active,
+      fromMotion: motion,
+      toMotion: motion,
+      fromSeed: active && typeof active.toSeed === "number" ? active.toSeed : previous,
+      toSeed: next,
+      startMs: playMs,
+    };
+    paintDemo(true);
+    applySweep(demoElapsed);
+  }
+
+  function refreshAnimNote() {
+    if (demoNote) demoNote.textContent = motionNote(demoRunning);
+  }
+
+  const optionsButton = root.querySelector("#anim-options");
+  const animDialog = root.querySelector("#anim-dialog");
+  if (optionsButton && animDialog && typeof optionsButton.addEventListener === "function") {
+    optionsButton.addEventListener("click", (event) => {
+      if (event && typeof event.preventDefault === "function") event.preventDefault();
+      if (animDialog.open) return;
+      if (typeof animDialog.showModal === "function") animDialog.showModal();
+      else animDialog.setAttribute("open", "");
+    });
+  }
+  if (animDialog && typeof animDialog.addEventListener === "function") {
+    animDialog.addEventListener("click", (event) => {
+      if (event.target === animDialog && typeof animDialog.close === "function") animDialog.close();
+    });
+    animDialog.addEventListener("change", (event) => {
+      const target = event.target;
+      if (!target) return;
+      if (target.id === "anim-seed") commitSeed();
+      if (target.name === "camera-path") refreshAnimNote();
+    });
+  }
+  const randomSeedButton = root.querySelector("#anim-seed-random");
+  if (randomSeedButton && typeof randomSeedButton.addEventListener === "function") {
+    randomSeedButton.addEventListener("click", (event) => {
+      if (event && typeof event.preventDefault === "function") event.preventDefault();
+      const input = root.querySelector("#anim-seed");
+      const seed = Math.floor(Math.random() * 999982) + 2;
+      if (input) input.value = String(seed);
+      commitSeed();
+      refreshAnimNote();
+    });
+  }
+  const durationInput = root.querySelector("#mode-duration");
+  if (durationInput && typeof durationInput.addEventListener === "function") {
+    durationInput.addEventListener("input", refreshAnimNote);
+  }
+
   if (demoBar && typeof demoBar.addEventListener === "function") {
     demoBar.addEventListener("change", (event) => {
       const target = event.target;
       if (!target) return;
       if (target.id === "auto-toggle" && target.checked) lastAutoMs = playMs;
-      if (target.id === "rotate-toggle" || target.id === "auto-toggle") {
-        if (demoNote) demoNote.textContent = motionNote(demoRunning);
-      }
+      if (target.id === "rotate-toggle" || target.id === "auto-toggle") refreshAnimNote();
     });
   }
 

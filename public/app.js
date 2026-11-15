@@ -1481,9 +1481,28 @@ export function mountWorkspace(root = globalThis.document) {
   return { panel, canvas, scene };
 }
 
+function reportStudioFrameHeight() {
+  if (typeof window === "undefined" || window.parent === window) return;
+  const root = document.querySelector(".workspace") || document.body;
+  const height = Math.ceil(Math.max(root.scrollHeight, document.documentElement.scrollHeight, document.body.scrollHeight));
+  window.parent.postMessage({ source: "agent-studio-demo", height }, "*");
+}
+
+function watchStudioFrameHeight() {
+  reportStudioFrameHeight();
+  if (typeof ResizeObserver !== "undefined") {
+    const observer = new ResizeObserver(() => reportStudioFrameHeight());
+    const workspace = document.querySelector(".workspace");
+    if (workspace) observer.observe(workspace);
+    observer.observe(document.documentElement);
+  }
+  window.addEventListener("resize", reportStudioFrameHeight);
+}
+
 if (typeof document !== "undefined") {
   const start = () => {
     mountWorkspace(document);
+    watchStudioFrameHeight();
   };
 
   if (document.readyState === "loading") {

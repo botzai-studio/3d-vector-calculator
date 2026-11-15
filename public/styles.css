@@ -29,11 +29,13 @@ body {
 .workspace {
   display: grid;
   grid-template-columns: var(--panel-width) minmax(0, 1fr);
+  grid-template-areas: "panel viewport";
   height: 100%;
   min-height: 100%;
 }
 
 .panel {
+  grid-area: panel;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -67,6 +69,7 @@ body {
 }
 
 .viewport {
+  grid-area: viewport;
   position: relative;
   min-width: 0;
   min-height: 0;
@@ -599,6 +602,39 @@ body {
   margin-top: 6px;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
+}
+
+
+/* Under ~800px the 380px side panel would leave the 3D view with 0 width. Stack the
+   canvas above the controls and let the document (and the embedding iframe) grow. */
+@media (max-width: 799px) {
+  html,
+  body {
+    height: auto;
+    min-height: 100%;
+    overflow: auto;
+  }
+
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "viewport"
+      "panel";
+    height: auto;
+    min-height: 100%;
+  }
+
+  .viewport {
+    width: 100%;
+    height: min(70vw, 420px);
+    min-height: 280px;
+  }
+
+  .panel {
+    overflow: visible;
+    border-right: 0;
+    border-top: 1px solid var(--line);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

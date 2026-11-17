@@ -1,0 +1,31 @@
+# Agent Studio: behavioural tests. Runs the project's own `node --test` suite on a
+# disposable GitHub-hosted runner. Credential-free by design: the job token has no
+# permissions, no secrets are used, nothing is deployed, and the checkout keeps no
+# credentials. Studio reads this check's result to mark "behavioral tests".
+name: Behavioural tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: behavioural-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: behavioural tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: node --test
+        run: node --test
